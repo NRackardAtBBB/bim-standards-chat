@@ -1,0 +1,3 @@
+# API keys should not be committed to version control
+api_keys.json
+*.log

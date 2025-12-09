@@ -1,0 +1,33 @@
+# Git ignore file for BBB Standards Assistant
+
+# API Keys and sensitive configuration
+config/api_keys.json
+
+# Logs
+*.log
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# PyRevit cache
+*.pycache
+*.pyc
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Test files
+test_*.py
+tests/
