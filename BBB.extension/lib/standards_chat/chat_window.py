@@ -109,9 +109,9 @@ class StandardsChatWindow(Window):
             self.anthropic = AnthropicClient(self.config)
             
             # Initialize usage logger
-            central_log_path = self.config.get('logging', 'central_log_path')
+            central_log_dir = self.config.get('logging', 'central_log_dir')
             self.usage_logger = UsageLogger(
-                central_log_path=central_log_path
+                central_log_dir=central_log_dir
             )
             
             # Initialize action executor
@@ -531,10 +531,12 @@ class StandardsChatWindow(Window):
                 try:
                     self.usage_logger.log_interaction(
                         query=user_input,
-                        response_preview=response.get('text', '')[:100],
+                        response_preview=response.get('text', ''),
                         source_count=len(response.get('sources', [])),
                         duration_seconds=duration_seconds,
-                        revit_context=revit_context
+                        revit_context=revit_context,
+                        session_id=self.current_session_id,
+                        screenshot_base64=screenshot_base64
                     )
                 except Exception as log_error:
                     # print("Error logging interaction: {}".format(str(log_error)))

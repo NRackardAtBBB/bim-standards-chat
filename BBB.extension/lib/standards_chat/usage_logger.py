@@ -7,6 +7,7 @@ Tracks usage analytics for Standards Chat
 import json
 import os
 import time
+import base64
 from datetime import datetime, timedelta
 import hashlib
 
@@ -14,13 +15,13 @@ import hashlib
 class UsageLogger:
     """Log chat interactions for analytics"""
     
-    def __init__(self, local_log_dir=None, central_log_path=None):
+    def __init__(self, local_log_dir=None, central_log_dir=None):
         """
         Initialize usage logger
         
         Args:
             local_log_dir: Local directory for detailed logs (user's machine)
-            central_log_path: Network path for aggregated analytics (optional)
+            central_log_dir: Network directory for aggregated analytics (optional)
         """
         # Local logs (detailed, on user machine)
         if local_log_dir:
@@ -50,7 +51,7 @@ class UsageLogger:
                 pass
         
         # Central analytics (aggregated, on network share)
-        self.central_log_path = central_log_path
+        self.central_log_dir = central_log_dir
         
         # Local log file (one per day)
         today = datetime.now().strftime('%Y-%m-%d')
@@ -63,16 +64,18 @@ class UsageLogger:
         self.user_id = self._get_anonymous_user_id()
     
     def log_interaction(self, query, response_preview, source_count, 
-                       duration_seconds, revit_context=None):
+                       duration_seconds, revit_context=None, session_id=None, screenshot_base64=None):
         """
         Log a chat interaction
         
         Args:
-            query: User's question (full text for local, truncated for central)
-            response_preview: First 100 chars of response
-            source_count: Number of Notion pages found
+            query: User's question
+            response_preview: Response text
+            source_count: Number of sources found
             duration_seconds: Time taken to respond
             revit_context: Dict of Revit context (optional)
+            session_id: Unique session identifier
+            screenshot_base64: Base64 encoded screenshot string
         """
         timestamp = datetime.utcnow().isoformat()
         
@@ -80,7 +83,8 @@ class UsageLogger:
         local_entry = {
             'timestamp': timestamp,
             'user_id': self.user_id,
-            'query': query,  # Full query stored locally
+            'session_id': session_id,
+            'query': query,
             'query_length': len(query),
             'response_preview': response_preview[:100] if response_preview else '',
             'source_count': source_count,
@@ -88,33 +92,45 @@ class UsageLogger:
             'has_revit_context': revit_context is not None
         }
         
-        # Add Revit context summary (not full details)
+        # Add Revit context summary
         if revit_context:
             local_entry['revit_context_summary'] = {
                 'has_selection': 'selection' in revit_context if isinstance(revit_context, dict) else False,
-                'has_screenshot': 'screenshot' in revit_context if isinstance(revit_context, dict) else False,
+                'has_screenshot': screenshot_base64 is not None,
                 'view_type': revit_context.get('view', {}).get('view_type') if isinstance(revit_context, dict) else None,
                 'is_workshared': revit_context.get('document', {}).get('is_workshared') if isinstance(revit_context, dict) else None
             }
         
-        # Write to local log
         self._write_local_log(local_entry)
         
-        # Central aggregated analytics entry (privacy-conscious)
-        if self.central_log_path:
+        # Central aggregated analytics entry
+        if self.central_log_dir:
+            # Handle screenshot
+            screenshot_path = None
+            if screenshot_base64:
+                screenshot_path = self._save_screenshot(screenshot_base64, session_id, timestamp)
+
+            # Get raw username from context if available, else use env var
+            username = os.environ.get('USERNAME', 'unknown')
+            if revit_context and 'username' in revit_context:
+                username = revit_context['username']
+
             central_entry = {
                 'timestamp': timestamp,
-                'user_id': self.user_id,  # Anonymous hash
-                'query_keywords': self._extract_keywords(query),  # Not full query
-                'query_length': len(query),
+                'username': username,
+                'session_id': session_id,
+                'query': query,
+                'response': response_preview, # Full response requested
                 'source_count': source_count,
                 'duration_seconds': round(duration_seconds, 2),
-                'has_revit_context': revit_context is not None,
-                'day_of_week': datetime.now().strftime('%A'),
-                'hour_of_day': datetime.now().hour
+                'model_name': revit_context.get('project_name') if revit_context else None,
+                'view_name': revit_context.get('active_view') if revit_context else None,
+                'selection_count': revit_context.get('selection_count', 0) if revit_context else 0,
+                'has_screenshot': screenshot_base64 is not None,
+                'screenshot_path': screenshot_path
             }
             
-            self._write_central_log(central_entry)
+            self._write_central_log(central_entry, username, session_id)
     
     def _write_local_log(self, entry):
         """Write entry to local log file"""
@@ -124,26 +140,56 @@ class UsageLogger:
         except Exception as e:
             print("Error writing local log: {}".format(str(e)))
     
-    def _write_central_log(self, entry):
-        """Write aggregated entry to central network location"""
-        if not self.central_log_path:
+    def _write_central_log(self, entry, username, session_id):
+        """Write entry to central network location (session specific file)"""
+        if not self.central_log_dir:
             return
         
         try:
             # Ensure central directory exists
-            central_dir = os.path.dirname(self.central_log_path)
-            if central_dir and not os.path.exists(central_dir):
+            if not os.path.exists(self.central_log_dir):
                 try:
-                    os.makedirs(central_dir)
+                    os.makedirs(self.central_log_dir)
                 except:
                     pass
             
-            # Append to central log
-            with open(self.central_log_path, 'a') as f:
+            # Create session filename: YYYY-MM-DD_Username_SessionID.json
+            date_str = datetime.now().strftime('%Y-%m-%d')
+            safe_username = "".join([c for c in username if c.isalnum() or c in (' ', '.', '_')]).strip()
+            filename = "{}_{}_{}.json".format(date_str, safe_username, session_id)
+            file_path = os.path.join(self.central_log_dir, filename)
+            
+            # Append to session file (list of objects)
+            # Using JSONL is safer for appending and PowerBI supports it
+            with open(file_path, 'a') as f:
                 f.write(json.dumps(entry) + '\n')
+                
         except Exception as e:
-            # Fail silently - don't block chat if network share unavailable
             print("Could not write to central log: {}".format(str(e)))
+
+    def _save_screenshot(self, base64_str, session_id, timestamp):
+        """Save screenshot to central directory"""
+        if not self.central_log_dir:
+            return None
+            
+        try:
+            screenshots_dir = os.path.join(self.central_log_dir, 'screenshots')
+            if not os.path.exists(screenshots_dir):
+                os.makedirs(screenshots_dir)
+                
+            # Create filename
+            ts_safe = timestamp.replace(':', '-').replace('.', '-')
+            filename = "{}_{}.png".format(session_id, ts_safe)
+            file_path = os.path.join(screenshots_dir, filename)
+            
+            # Decode and save
+            with open(file_path, "wb") as fh:
+                fh.write(base64.b64decode(base64_str))
+                
+            return file_path
+        except Exception as e:
+            print("Error saving screenshot: {}".format(str(e)))
+            return None
     
     def _get_anonymous_user_id(self):
         """Generate anonymous user ID from username + machine"""
