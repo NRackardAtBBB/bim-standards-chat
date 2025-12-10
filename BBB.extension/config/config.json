@@ -8,7 +8,7 @@
     "analytics_enabled": true, 
     "enabled": true, 
     "log_file": "standards_chat.log", 
-    "central_log_path": "N:\\Design Technology Resources\\00_Admin\\ChatLogs\\standards_chat_usage.jsonl"
+    "central_log_dir": "N:\\Design Technology Resources\\00_Admin\\ChatLogs"
   }, 
   "features": {
     "enable_workflows": false, 

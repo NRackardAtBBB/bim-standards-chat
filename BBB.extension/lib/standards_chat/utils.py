@@ -109,6 +109,7 @@ def extract_revit_context():
         if doc:
             context['project_name'] = doc.Title or 'Untitled'
             context['revit_version'] = doc.Application.VersionNumber
+            context['username'] = doc.Application.Username
             
         # Active view info
         if active_view:
