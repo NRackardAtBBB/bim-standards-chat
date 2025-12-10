@@ -10,6 +10,15 @@ import os
 import json
 import System
 
+# Add lib path
+script_dir = os.path.dirname(__file__)
+extension_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(script_dir))))
+lib_path = os.path.join(extension_dir, 'lib')
+if lib_path not in sys.path:
+    sys.path.append(lib_path)
+
+from standards_chat.history_manager import HistoryManager
+
 __title__ = "Settings"
 __author__ = "BBB DCT Team"
 __doc__ = "Configure API keys and settings for Standards Assistant"
@@ -109,6 +118,18 @@ class SettingsWindow(forms.WPFWindow):
         else: # Notion
             self.sharepoint_group.Visibility = System.Windows.Visibility.Collapsed
             self.notion_group.Visibility = System.Windows.Visibility.Visible
+
+    def clear_history_click(self, sender, args):
+        """Clear all chat history"""
+        if forms.alert("Are you sure you want to delete all chat history? This cannot be undone.", 
+                      title="Confirm Delete", 
+                      yes=True, no=True):
+            try:
+                history_manager = HistoryManager()
+                count = history_manager.clear_all_sessions()
+                forms.alert("Deleted {} chat sessions.".format(count), title="Success")
+            except Exception as e:
+                forms.alert("Error clearing history: {}".format(str(e)), title="Error")
 
     def save_click(self, sender, args):
         """Save button click handler"""

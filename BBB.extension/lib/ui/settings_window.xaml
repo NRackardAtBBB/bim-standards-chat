@@ -4,45 +4,126 @@
         Width="600" Height="700"
         WindowStartupLocation="CenterScreen"
         ResizeMode="NoResize"
-        Background="#F5F5F5">
+        Background="#F3F3F3">
     
     <Window.Resources>
-        <Style TargetType="GroupBox">
-            <Setter Property="Margin" Value="10,5"/>
-            <Setter Property="Padding" Value="10"/>
-            <Setter Property="Background" Value="White"/>
-        </Style>
+        <!-- Color Palette -->
+        <SolidColorBrush x:Key="PrimaryColor" Color="#0078D4"/>
+        <SolidColorBrush x:Key="PrimaryDarkColor" Color="#005A9E"/>
+        <SolidColorBrush x:Key="BackgroundColor" Color="#F3F3F3"/>
+        <SolidColorBrush x:Key="SurfaceColor" Color="#FFFFFF"/>
+        <SolidColorBrush x:Key="BorderColor" Color="#E0E0E0"/>
+        <SolidColorBrush x:Key="TextPrimaryColor" Color="#323130"/>
+        <SolidColorBrush x:Key="TextSecondaryColor" Color="#605E5C"/>
+
+        <!-- Base Styles -->
         <Style TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="Segoe UI"/>
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryColor}"/>
             <Setter Property="Margin" Value="0,5,0,2"/>
             <Setter Property="FontSize" Value="12"/>
         </Style>
-        <Style TargetType="TextBox">
-            <Setter Property="Padding" Value="5"/>
-            <Setter Property="FontSize" Value="11"/>
-            <Setter Property="Height" Value="28"/>
+
+        <Style TargetType="GroupBox">
+            <Setter Property="Margin" Value="0,0,0,15"/>
+            <Setter Property="Padding" Value="15"/>
+            <Setter Property="Background" Value="{StaticResource SurfaceColor}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderColor}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="HeaderTemplate">
+                <Setter.Value>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding}" FontWeight="SemiBold" FontSize="14" Margin="0,0,0,5"/>
+                    </DataTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
+
+        <Style TargetType="TextBox">
+            <Setter Property="Padding" Value="8,5"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Height" Value="30"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderColor}"/>
+        </Style>
+
+        <Style TargetType="PasswordBox">
+            <Setter Property="Padding" Value="8,5"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Height" Value="30"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderColor}"/>
+        </Style>
+
         <Style TargetType="CheckBox">
             <Setter Property="Margin" Value="0,8,0,5"/>
             <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryColor}"/>
         </Style>
+
+        <!-- Modern Button Style -->
         <Style TargetType="Button">
             <Setter Property="Padding" Value="20,8"/>
             <Setter Property="FontSize" Value="12"/>
             <Setter Property="Margin" Value="5"/>
+            <Setter Property="Background" Value="{StaticResource SurfaceColor}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderColor}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" 
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="4" 
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#FAFAFA"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
+
+        <Style x:Key="PrimaryButtonStyle" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Background" Value="{StaticResource PrimaryColor}"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" 
+                                CornerRadius="4" 
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="{StaticResource PrimaryDarkColor}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
     </Window.Resources>
     
-    <Grid Margin="10">
+    <Grid Margin="20">
         <Grid.RowDefinitions>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
         
-        <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
+        <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto" Padding="0,0,10,0">
             <StackPanel>
                 
                 <!-- Main Settings Section -->
-                <GroupBox Header="General Settings" FontWeight="Bold">
+                <GroupBox Header="General Settings">
                     <StackPanel>
                         <TextBlock Text="User Name (Optional):" FontWeight="Normal"/>
                         <TextBox x:Name="user_name" 
@@ -52,47 +133,56 @@
                         <TextBox x:Name="user_team" 
                                  ToolTip="Your studio or team name"/>
                         
-                        <TextBlock Text="Feature Settings:" FontWeight="Bold" Margin="0,20,0,10" FontSize="13"/>
+                        <TextBlock Text="Feature Settings:" FontWeight="SemiBold" Margin="0,20,0,10" FontSize="13"/>
                         
                         <CheckBox x:Name="auto_include_screenshot" 
                                   Content="Include screenshots with queries" 
                                   FontWeight="Normal"
-                                  Margin="0,5,0,5"
                                   ToolTip="Automatically capture and send Revit screenshots with each query"/>
                         
                         <CheckBox x:Name="auto_include_context" 
                                   Content="Include Revit context (active view, worksets, selection)" 
                                   FontWeight="Normal"
-                                  Margin="0,5,0,5"
                                   ToolTip="Send information about your current Revit session with queries"/>
                         
                         <CheckBox x:Name="enable_actions" 
                                   Content="Enable executable actions (select elements, change worksets, etc.)" 
                                   FontWeight="Normal"
-                                  Margin="0,5,0,5"
                                   ToolTip="Allow the assistant to suggest and perform actions directly in Revit"/>
                         
                         <CheckBox x:Name="enable_workflows" 
                                   Content="Enable multi-step workflows" 
                                   FontWeight="Normal"
-                                  Margin="0,5,0,5"
                                   ToolTip="Allow the assistant to suggest and execute complex multi-step workflows"/>
+                    </StackPanel>
+                </GroupBox>
+                
+                <!-- Data Management -->
+                <GroupBox Header="Data Management">
+                    <StackPanel>
+                        <TextBlock Text="Chat History:" FontWeight="Normal"/>
+                        <Button x:Name="clear_history_btn" 
+                                Content="Clear All Chat History" 
+                                HorizontalAlignment="Left"
+                                Click="clear_history_click"
+                                Margin="0,5,0,0"
+                                Padding="15,5"/>
                     </StackPanel>
                 </GroupBox>
                 
                 <!-- Advanced Settings Expander -->
                 <Expander Header="Advanced Settings" 
-                         FontWeight="Bold" 
-                         Margin="10,5"
-                         Background="White"
+                         FontWeight="SemiBold" 
+                         Margin="0,5"
+                         Background="{StaticResource SurfaceColor}"
                          Padding="10">
-                    <StackPanel>
+                    <StackPanel Margin="0,10,0,0">
                         
                         <!-- Standards Source -->
-                        <GroupBox Header="Standards Source" FontWeight="Bold" Margin="0,5">
+                        <GroupBox Header="Standards Source">
                             <StackPanel>
                                 <TextBlock Text="Primary Source:" FontWeight="Normal"/>
-                                <ComboBox x:Name="standards_source_combo" Margin="0,0,0,10" SelectionChanged="source_changed">
+                                <ComboBox x:Name="standards_source_combo" Margin="0,0,0,10" SelectionChanged="source_changed" Height="30" Padding="5">
                                     <ComboBoxItem Content="Notion" Tag="notion"/>
                                     <ComboBoxItem Content="SharePoint" Tag="sharepoint"/>
                                 </ComboBox>
@@ -100,7 +190,7 @@
                         </GroupBox>
 
                         <!-- SharePoint Configuration -->
-                        <GroupBox x:Name="sharepoint_group" Header="SharePoint Configuration" FontWeight="Bold" Margin="0,5">
+                        <GroupBox x:Name="sharepoint_group" Header="SharePoint Configuration">
                              <StackPanel>
                                 <TextBlock Text="Site URL:" FontWeight="Normal"/>
                                 <TextBox x:Name="sharepoint_site_url" />
@@ -109,12 +199,12 @@
                                 <TextBlock Text="Client ID:" FontWeight="Normal" Margin="0,5,0,2"/>
                                 <TextBox x:Name="sharepoint_client_id" />
                                 <TextBlock Text="Client Secret:" FontWeight="Normal" Margin="0,5,0,2"/>
-                                <PasswordBox x:Name="sharepoint_client_secret" Height="28" Padding="5"/>
+                                <PasswordBox x:Name="sharepoint_client_secret"/>
                              </StackPanel>
                         </GroupBox>
 
                         <!-- Notion Configuration -->
-                        <GroupBox x:Name="notion_group" Header="Notion Configuration" FontWeight="Bold" Margin="0,5">
+                        <GroupBox x:Name="notion_group" Header="Notion Configuration">
                             <StackPanel>
                                 <TextBlock Text="Database ID:" FontWeight="Normal"/>
                                 <TextBox x:Name="notion_database_id" />
@@ -126,7 +216,7 @@
                         </GroupBox>
                         
                         <!-- Anthropic Configuration -->
-                        <GroupBox Header="Anthropic Configuration" FontWeight="Bold" Margin="0,5">
+                        <GroupBox Header="Anthropic Configuration">
                             <StackPanel>
                                 <TextBlock Text="API Key:" FontWeight="Normal"/>
                                 <TextBox x:Name="anthropic_api_key" />
@@ -140,7 +230,7 @@
                         </GroupBox>
                         
                         <!-- Logging Configuration -->
-                        <GroupBox Header="Logging Configuration" FontWeight="Bold" Margin="0,10,0,5">
+                        <GroupBox Header="Logging Configuration">
                             <StackPanel>
                                 <CheckBox x:Name="logging_enabled" Content="Enable Logging" FontWeight="Normal"/>
                                 <CheckBox x:Name="analytics_enabled" Content="Enable Analytics" FontWeight="Normal"/>
@@ -155,7 +245,7 @@
                                     <Button Content="Browse..." 
                                             Grid.Column="1" 
                                             Click="browse_log_path"
-                                            Padding="10,6"/>
+                                            Padding="10,0"/>
                                 </Grid>
                             </StackPanel>
                         </GroupBox>
@@ -174,9 +264,7 @@
             <Button Content="Save" 
                     Click="save_click" 
                     IsDefault="True"
-                    Background="#0078D4"
-                    Foreground="White"
-                    BorderThickness="0"/>
+                    Style="{StaticResource PrimaryButtonStyle}"/>
             <Button Content="Cancel" 
                     Click="cancel_click"
                     IsCancel="True"/>
