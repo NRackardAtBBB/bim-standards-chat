@@ -67,6 +67,59 @@ class AnthropicClient:
                 base_prompt += "\n\nNote: Multi-step workflows are currently disabled. Only single actions are available."
         
         return base_prompt
+
+    def generate_title(self, user_query, assistant_response):
+        """
+        Generate a short 3-5 word title for the conversation
+        
+        Args:
+            user_query (str): The user's first message
+            assistant_response (str): The assistant's response
+            
+        Returns:
+            str: A short title
+        """
+        try:
+            prompt = "Generate a very short (3-5 words) title for this conversation based on the user's request. Do not use quotes. Request: " + user_query
+            
+            messages = [
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ]
+            
+            request_body = {
+                "model": "claude-3-haiku-20240307", # Use fast/cheap model for titles
+                "max_tokens": 20,
+                "messages": messages,
+                "temperature": 0.5
+            }
+            
+            json_content = json.dumps(request_body)
+            content = System.Net.Http.StringContent(
+                json_content,
+                Encoding.UTF8,
+                "application/json"
+            )
+            
+            # Send request
+            response = self.client.PostAsync(self.base_url + "/messages", content).Result
+            response_text = response.Content.ReadAsStringAsync().Result
+            
+            if response.IsSuccessStatusCode:
+                response_json = json.loads(response_text)
+                title = response_json['content'][0]['text'].strip()
+                # Remove quotes if present
+                if title.startswith('"') and title.endswith('"'):
+                    title = title[1:-1]
+                return title
+            else:
+                return None
+                
+        except Exception as e:
+            print("Error generating title: {}".format(str(e)))
+            return None
     
     def get_response_stream(self, user_query, notion_pages, revit_context=None, 
                            conversation_history=None, callback=None, screenshot_base64=None):

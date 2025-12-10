@@ -39,6 +39,7 @@ from standards_chat.config_manager import ConfigManager
 from standards_chat.utils import extract_revit_context
 from standards_chat.usage_logger import UsageLogger
 from standards_chat.revit_actions import RevitActionExecutor, parse_action_from_response
+from standards_chat.history_manager import HistoryManager
 
 
 class StandardsChatWindow(Window):
@@ -78,6 +79,14 @@ class StandardsChatWindow(Window):
         self.message_scrollviewer = window.FindName('MessageScrollViewer')
         self.spinner_rotation = window.FindName('SpinnerRotation')
         self.header_icon = window.FindName('HeaderIcon')
+        self.header_icon_button = window.FindName('HeaderIconButton')
+        
+        # Sidebar elements
+        self.sidebar = window.FindName('Sidebar')
+        self.sidebar_column = window.FindName('SidebarColumn')
+        self.toggle_sidebar_button = window.FindName('ToggleSidebarButton')
+        self.new_chat_button = window.FindName('NewChatButton')
+        self.history_listbox = window.FindName('HistoryListBox')
         
         # Load icon image
         self._load_header_icon()
@@ -111,6 +120,10 @@ class StandardsChatWindow(Window):
                 self.action_executor = RevitActionExecutor(revit.doc, revit.uidoc)
             except:
                 self.action_executor = None
+            
+            # Initialize history manager
+            self.history_manager = HistoryManager()
+            
         except Exception as e:
             # Show error in status
             self.status_text.Text = "Configuration Error: {}".format(str(e))
@@ -120,15 +133,37 @@ class StandardsChatWindow(Window):
         # Conversation history
         self.conversation = []
         
+        # Session tracking
+        self.current_session_id = None
+        self.session_title = None
+        
         # Track active action button
         self.active_action_button = None
         
         # Wire up events
         self.send_button.Click += self.on_send_click
         self.input_textbox.KeyDown += self.on_input_keydown
+        self.toggle_sidebar_button.Click += self.on_toggle_sidebar_click
+        self.new_chat_button.Click += self.on_new_chat_click
+        self.history_listbox.SelectionChanged += self.on_history_selection_changed
+        if self.header_icon_button:
+            self.header_icon_button.Click += self.on_header_icon_click
+        
+        # Load chat history into sidebar
+        self.Loaded += self.on_window_loaded
         
         # Focus input box
         self.Loaded += lambda s, e: self.input_textbox.Focus()
+    
+    def on_header_icon_click(self, sender, args):
+        """Open the standards website"""
+        try:
+            from System.Diagnostics import Process, ProcessStartInfo
+            psi = ProcessStartInfo("https://beyerblinderbelle.sharepoint.com/sites/revitstandards")
+            psi.UseShellExecute = True
+            Process.Start(psi)
+        except Exception as e:
+            print("Error opening URL: {}".format(str(e)))
     
     def _load_header_icon(self):
         """Load the icon from the button folder into the header"""
@@ -143,7 +178,7 @@ class StandardsChatWindow(Window):
                 'BBB.tab',
                 'Standards Assistant.panel',
                 'Standards Chat.pushbutton',
-                'icon.dark.png'
+                'icon.png'
             )
             
             
@@ -178,6 +213,240 @@ class StandardsChatWindow(Window):
                 else:
                     self.send_message()
                 args.Handled = True
+    
+    def on_window_loaded(self, sender, args):
+        """Handle window loaded event - populate history list"""
+        self.refresh_history_list()
+    
+    def on_toggle_sidebar_click(self, sender, args):
+        """Toggle sidebar visibility"""
+        from System.Windows import GridLength, GridUnitType
+        
+        # Simple toggle for now (animation requires more complex setup with Storyboards in code-behind)
+        if self.sidebar_column.Width.Value > 0:
+            # Hide sidebar
+            self.sidebar_column.Width = GridLength(0, GridUnitType.Pixel)
+            # Icon remains the history clock
+        else:
+            # Show sidebar
+            self.sidebar_column.Width = GridLength(250, GridUnitType.Pixel)
+            
+    def on_delete_history_item(self, sender, args):
+        """Handle delete button click in history list"""
+        try:
+            button = sender
+            session_id = button.Tag
+            
+            if not session_id:
+                return
+                
+            # Delete from disk
+            if self.history_manager.delete_session(session_id):
+                # If it's the current session, clear the chat
+                if session_id == self.current_session_id:
+                    self.on_new_chat_click(None, None)
+                
+                # Refresh list
+                self.refresh_history_list()
+                
+        except Exception as e:
+            print("Error deleting session: {}".format(str(e)))
+    
+    def on_new_chat_click(self, sender, args):
+        """Start a new chat session"""
+        from System.Windows import GridLength, GridUnitType
+        
+        # Collapse sidebar
+        self.sidebar_column.Width = GridLength(0, GridUnitType.Pixel)
+        
+        # If current conversation has content, save it first
+        if self.conversation:
+            self.save_current_session()
+        
+        # Clear current conversation
+        self.conversation = []
+        self.current_session_id = None
+        self.session_title = None
+        
+        # Clear messages panel except welcome message
+        while self.messages_panel.Children.Count > 1:
+            self.messages_panel.Children.RemoveAt(1)
+        
+        # Clear input
+        self.input_textbox.Clear()
+        self.input_textbox.Focus()
+        
+        # Refresh history list
+        self.refresh_history_list()
+    
+    def on_history_selection_changed(self, sender, args):
+        """Handle history list selection change"""
+        if self.history_listbox.SelectedItem is None:
+            return
+        
+        # In WPF ListBox, SelectedItem is the content we added (ListBoxItem)
+        # We stored the session_id in the Tag property
+        selected_item = self.history_listbox.SelectedItem
+        
+        # Check if it has a Tag property (it should be a ListBoxItem)
+        if hasattr(selected_item, 'Tag'):
+            session_id = selected_item.Tag
+        else:
+            # Fallback if something else was selected
+            return
+            
+        # Don't reload if it's the current session
+        if session_id == self.current_session_id:
+            return
+            
+        # Collapse sidebar
+        from System.Windows import GridLength, GridUnitType
+        self.sidebar_column.Width = GridLength(0, GridUnitType.Pixel)
+        
+        # Save current session if it has content
+        if self.conversation:
+            self.save_current_session()
+        
+        # Load selected session
+        self.load_chat_session(session_id)
+    
+    def refresh_history_list(self):
+        """Refresh the history list from disk"""
+        from System.Windows.Controls import ListBoxItem, Grid, ColumnDefinition, StackPanel, TextBlock, Button, ControlTemplate, ContentPresenter, Border
+        from System.Windows import GridLength, GridUnitType, Thickness, TextTrimming, TextWrapping
+        from System.Windows.Media import Brushes, SolidColorBrush, Color
+        
+        sessions = self.history_manager.list_sessions()
+        
+        # Clear current items
+        self.history_listbox.Items.Clear()
+        
+        # Add sessions to list
+        for session in sessions:
+            # Create ListBoxItem
+            item = ListBoxItem()
+            item.Tag = session['session_id']
+            
+            # Create Grid
+            grid = Grid()
+            grid.Margin = Thickness(0, 2, 0, 2)
+            col1 = ColumnDefinition()
+            col1.Width = GridLength(1, GridUnitType.Star)
+            col2 = ColumnDefinition()
+            col2.Width = GridLength.Auto
+            grid.ColumnDefinitions.Add(col1)
+            grid.ColumnDefinitions.Add(col2)
+            
+            # Text Stack
+            stack = StackPanel()
+            Grid.SetColumn(stack, 0)
+            
+            title_txt = TextBlock()
+            title_txt.Text = session['title']
+            title_txt.FontSize = 12
+            title_txt.TextTrimming = TextTrimming.CharacterEllipsis
+            title_txt.Foreground = self.FindResource("TextPrimaryColor")
+            title_txt.ToolTip = session['title']
+            
+            time_txt = TextBlock()
+            # Format timestamp
+            try:
+                from datetime import datetime
+                # Try parsing ISO format manually since fromisoformat is 3.7+
+                # Format: YYYY-MM-DDTHH:MM:SS.mmmmmm
+                ts = session['timestamp']
+                if '.' in ts:
+                    dt = datetime.strptime(ts, "%Y-%m-%dT%H:%M:%S.%f")
+                else:
+                    dt = datetime.strptime(ts, "%Y-%m-%dT%H:%M:%S")
+                time_txt.Text = dt.strftime('%b %d, %I:%M %p')
+            except:
+                time_txt.Text = session['timestamp']
+            time_txt.FontSize = 10
+            time_txt.Foreground = self.FindResource("TextSecondaryColor")
+            time_txt.Margin = Thickness(0, 2, 0, 0)
+            
+            stack.Children.Add(title_txt)
+            stack.Children.Add(time_txt)
+            
+            # Delete Button
+            del_btn = Button()
+            del_btn.Content = "×"
+            del_btn.Width = 20
+            del_btn.Height = 20
+            del_btn.Margin = Thickness(5, 0, 0, 0)
+            del_btn.Background = Brushes.Transparent
+            del_btn.Foreground = self.FindResource("TextSecondaryColor")
+            del_btn.BorderThickness = Thickness(0)
+            del_btn.FontSize = 14
+            del_btn.FontWeight = System.Windows.FontWeights.Bold
+            del_btn.Cursor = System.Windows.Input.Cursors.Hand
+            del_btn.Tag = session['session_id']
+            del_btn.ToolTip = "Delete Chat"
+            Grid.SetColumn(del_btn, 1)
+            
+            # Wire up delete event
+            del_btn.Click += self.on_delete_history_item
+            
+            grid.Children.Add(stack)
+            grid.Children.Add(del_btn)
+            
+            item.Content = grid
+            self.history_listbox.Items.Add(item)
+    
+    def save_current_session(self):
+        """Save the current chat session"""
+        if not self.conversation:
+            return
+        
+        # Create new session ID if we don't have one
+        if not self.current_session_id:
+            self.current_session_id = self.history_manager.create_new_session()
+        
+        # Use existing title or create from first message
+        if not self.session_title:
+            self.session_title = self.conversation[0].get('user', 'Untitled Chat')
+        
+        # Save to disk
+        self.history_manager.save_session(
+            self.current_session_id,
+            self.conversation,
+            self.session_title
+        )
+    
+    def load_chat_session(self, session_id):
+        """Load a chat session from disk"""
+        session_data = self.history_manager.load_session(session_id)
+        
+        if not session_data:
+            return
+        
+        # Set current session
+        self.current_session_id = session_id
+        self.session_title = session_data.get('title', 'Untitled Chat')
+        self.conversation = session_data.get('conversation', [])
+        
+        # Clear messages panel except welcome message
+        while self.messages_panel.Children.Count > 1:
+            self.messages_panel.Children.RemoveAt(1)
+        
+        # Re-render all messages
+        for exchange in self.conversation:
+            # Add user message
+            self.add_message(exchange['user'], is_user=True)
+            
+            # Add assistant response
+            self.add_message(
+                exchange['assistant'],
+                is_user=False,
+                sources=exchange.get('sources')
+            )
+        
+        # Scroll to bottom
+        self.message_scrollviewer.ScrollToBottom()
+        
+        # Focus input
+        self.input_textbox.Focus()
     
     def send_message(self):
         """Send user message and get response"""
@@ -278,6 +547,21 @@ class StandardsChatWindow(Window):
                     'sources': response['sources']
                 })
                 
+                # Generate title if it's the first exchange or title is default
+                if len(self.conversation) == 1 or self.session_title == "Untitled Chat":
+                    try:
+                        new_title = self.anthropic.generate_title(user_input, response['text'])
+                        if new_title:
+                            self.session_title = new_title
+                    except Exception as e:
+                        print("Title generation failed: " + str(e))
+                
+                # Auto-save session after each exchange
+                self.save_current_session()
+                
+                # Refresh history list to show updated session
+                self.Dispatcher.Invoke(self.refresh_history_list)
+                
                 # Add sources to the message
                 self.Dispatcher.Invoke(
                     lambda: self.finish_streaming_response(response['sources'])
@@ -306,13 +590,7 @@ class StandardsChatWindow(Window):
         """Add animated typing indicator bubble with status text"""
         # Create border (message bubble)
         border = Border()
-        border.CornerRadius = System.Windows.CornerRadius(8)
-        border.Padding = Thickness(12)
-        border.Margin = Thickness(10, 5, 50, 5)
-        border.HorizontalAlignment = HorizontalAlignment.Left
-        border.Background = Brushes.White
-        border.BorderBrush = SolidColorBrush(Color.FromRgb(224, 224, 224))
-        border.BorderThickness = Thickness(1)
+        border.Style = self.FindResource("MessageBubbleAssistant")
         border.Name = "TypingIndicator"
         
         # Create vertical stack for dots and status
@@ -329,7 +607,7 @@ class StandardsChatWindow(Window):
             dot = Ellipse()
             dot.Width = 8
             dot.Height = 8
-            dot.Fill = SolidColorBrush(Color.FromRgb(120, 120, 120))
+            dot.Fill = self.FindResource("TextSecondaryColor")
             dot.Margin = Thickness(0 if i == 0 else 4, 0, 0, 0)
             
             # Animate opacity
@@ -352,7 +630,7 @@ class StandardsChatWindow(Window):
         status_text = TextBlock()
         status_text.Text = "Searching BBB's Revit standards..."
         status_text.FontSize = 11
-        status_text.Foreground = SolidColorBrush(Color.FromRgb(120, 120, 120))
+        status_text.Foreground = self.FindResource("TextSecondaryColor")
         status_text.Margin = Thickness(0, 8, 0, 0)
         status_text.Name = "TypingStatusText"
         
@@ -410,19 +688,13 @@ class StandardsChatWindow(Window):
         
         # Create border (message bubble)
         border = Border()
-        border.CornerRadius = System.Windows.CornerRadius(8)
-        border.Padding = Thickness(12)
-        border.Margin = Thickness(10, 5, 50, 5)
-        border.HorizontalAlignment = HorizontalAlignment.Left
-        border.Background = Brushes.White
-        border.BorderBrush = SolidColorBrush(Color.FromRgb(224, 224, 224))
-        border.BorderThickness = Thickness(1)
+        border.Style = self.FindResource("MessageBubbleAssistant")
         border.Name = "StreamingMessage"
         
         # Create text content
         textblock = TextBlock()
         textblock.TextWrapping = TextWrapping.Wrap
-        textblock.Foreground = SolidColorBrush(Color.FromRgb(51, 51, 51))
+        textblock.Foreground = self.FindResource("TextPrimaryColor")
         textblock.Name = "StreamingTextBlock"
         
         border.Child = textblock
@@ -485,7 +757,7 @@ class StandardsChatWindow(Window):
                 # Add divider line
                 self.streaming_textblock.Inlines.Add(Run("\n\n"))
                 divider = Run("─" * 40)
-                divider.Foreground = SolidColorBrush(Color.FromRgb(224, 224, 224))
+                divider.Foreground = self.FindResource("BorderColor")
                 self.streaming_textblock.Inlines.Add(divider)
                 
                 # Add "Sources" header
@@ -493,7 +765,7 @@ class StandardsChatWindow(Window):
                 header = Run("📚 Reference Documents")
                 header.FontWeight = System.Windows.FontWeights.Bold
                 header.FontSize = 13
-                header.Foreground = SolidColorBrush(Color.FromRgb(42, 125, 225))
+                header.Foreground = self.FindResource("PrimaryColor")
                 self.streaming_textblock.Inlines.Add(header)
                 self.streaming_textblock.Inlines.Add(Run("\n"))
                 
@@ -503,7 +775,7 @@ class StandardsChatWindow(Window):
                     
                     # Bullet/icon
                     bullet = Run("→ ")
-                    bullet.Foreground = SolidColorBrush(Color.FromRgb(42, 125, 225))
+                    bullet.Foreground = self.FindResource("PrimaryColor")
                     bullet.FontWeight = System.Windows.FontWeights.Bold
                     self.streaming_textblock.Inlines.Add(bullet)
                     
@@ -512,7 +784,7 @@ class StandardsChatWindow(Window):
                     hyperlink.Inlines.Add(Run(source['title']))
                     hyperlink.NavigateUri = System.Uri(source['url'])
                     hyperlink.RequestNavigate += self.on_hyperlink_click
-                    hyperlink.Foreground = SolidColorBrush(Color.FromRgb(42, 125, 225))
+                    hyperlink.Foreground = self.FindResource("PrimaryColor")
                     hyperlink.TextDecorations = None  # Remove underline until hover
                     
                     self.streaming_textblock.Inlines.Add(hyperlink)
@@ -521,7 +793,7 @@ class StandardsChatWindow(Window):
                     if source.get('category'):
                         category_text = Run(" [{}]".format(source['category']))
                         category_text.FontSize = 10
-                        category_text.Foreground = SolidColorBrush(Color.FromRgb(120, 120, 120))
+                        category_text.Foreground = self.FindResource("TextSecondaryColor")
                         self.streaming_textblock.Inlines.Add(category_text)
             
             # Scroll to bottom
@@ -559,15 +831,7 @@ class StandardsChatWindow(Window):
                 ))
                 button = Button()
                 button.Content = action_data.get('label', 'Execute Action')
-                button.Margin = Thickness(0, 10, 0, 0)
-                button.Padding = Thickness(15, 8, 15, 8)
-                button.Background = SolidColorBrush(Color.FromRgb(42, 125, 225))
-                button.Foreground = Brushes.White
-                button.BorderThickness = Thickness(0)
-                button.Cursor = System.Windows.Input.Cursors.Hand
-                
-                # Add hover effect
-                button.FontWeight = System.Windows.FontWeights.Normal
+                button.Style = self.FindResource("ActionButtonStyle")
                 
                 # Store action data
                 button.Tag = action_data
@@ -668,26 +932,14 @@ class StandardsChatWindow(Window):
         """Add a message bubble to the chat"""
         # Create border (message bubble)
         border = Border()
-        border.CornerRadius = System.Windows.CornerRadius(8)
-        border.Padding = Thickness(12)
-        border.Margin = Thickness(
-            50 if is_user else 10,
-            5,
-            10 if is_user else 50,
-            5
-        )
-        border.HorizontalAlignment = \
-            HorizontalAlignment.Right if is_user else HorizontalAlignment.Left
         
-        # Set colors
+        # Set style based on user/assistant
         if is_user:
-            border.Background = SolidColorBrush(Color.FromRgb(42, 125, 225))  # Blue
+            border.Style = self.FindResource("MessageBubbleUser")
             text_color = Brushes.White
         else:
-            border.Background = Brushes.White
-            border.BorderBrush = SolidColorBrush(Color.FromRgb(224, 224, 224))
-            border.BorderThickness = Thickness(1)
-            text_color = SolidColorBrush(Color.FromRgb(51, 51, 51))
+            border.Style = self.FindResource("MessageBubbleAssistant")
+            text_color = self.FindResource("TextPrimaryColor")
         
         # Create text content with basic markdown formatting
         textblock = TextBlock()
@@ -705,7 +957,7 @@ class StandardsChatWindow(Window):
             # Add divider line
             textblock.Inlines.Add(Run("\n\n"))
             divider = Run("─" * 40)
-            divider.Foreground = SolidColorBrush(Color.FromRgb(224, 224, 224))
+            divider.Foreground = self.FindResource("BorderColor")
             textblock.Inlines.Add(divider)
             
             # Add "Sources" header
@@ -713,7 +965,7 @@ class StandardsChatWindow(Window):
             header = Run("📚 Reference Documents")
             header.FontWeight = System.Windows.FontWeights.Bold
             header.FontSize = 13
-            header.Foreground = SolidColorBrush(Color.FromRgb(42, 125, 225))
+            header.Foreground = self.FindResource("PrimaryColor")
             textblock.Inlines.Add(header)
             textblock.Inlines.Add(Run("\n"))
             
@@ -723,7 +975,7 @@ class StandardsChatWindow(Window):
                 
                 # Bullet/icon
                 bullet = Run("→ ")
-                bullet.Foreground = SolidColorBrush(Color.FromRgb(42, 125, 225))
+                bullet.Foreground = self.FindResource("PrimaryColor")
                 bullet.FontWeight = System.Windows.FontWeights.Bold
                 textblock.Inlines.Add(bullet)
                 
@@ -732,7 +984,7 @@ class StandardsChatWindow(Window):
                 hyperlink.Inlines.Add(Run(source['title']))
                 hyperlink.NavigateUri = System.Uri(source['url'])
                 hyperlink.RequestNavigate += self.on_hyperlink_click
-                hyperlink.Foreground = SolidColorBrush(Color.FromRgb(42, 125, 225))
+                hyperlink.Foreground = self.FindResource("PrimaryColor")
                 hyperlink.TextDecorations = None  # Remove underline until hover
                 
                 textblock.Inlines.Add(hyperlink)
@@ -741,7 +993,7 @@ class StandardsChatWindow(Window):
                 if source.get('category'):
                     category_text = Run(" [{}]".format(source['category']))
                     category_text.FontSize = 10
-                    category_text.Foreground = SolidColorBrush(Color.FromRgb(120, 120, 120))
+                    category_text.Foreground = self.FindResource("TextSecondaryColor")
                     textblock.Inlines.Add(category_text)
         
         border.Child = textblock
