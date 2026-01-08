@@ -26,6 +26,7 @@ import System
 import os
 import sys
 import time
+import json
 
 # Add lib path
 script_dir = os.path.dirname(__file__)
@@ -43,7 +44,7 @@ from standards_chat.history_manager import HistoryManager
 
 
 class StandardsChatWindow(Window):
-    """Main chat window for standards assistant"""
+    """Main chat window for Kodama"""
     
     def __init__(self):
         """Initialize the chat window"""
@@ -80,6 +81,7 @@ class StandardsChatWindow(Window):
         self.spinner_rotation = window.FindName('SpinnerRotation')
         self.header_icon = window.FindName('HeaderIcon')
         self.header_icon_button = window.FindName('HeaderIconButton')
+        self.ScreenshotToggle = window.FindName('ScreenshotToggle')
         
         # Sidebar elements
         self.sidebar = window.FindName('Sidebar')
@@ -108,6 +110,24 @@ class StandardsChatWindow(Window):
                 
             self.anthropic = AnthropicClient(self.config)
             
+            # Initialize vector DB client if enabled and user is in whitelist
+            self.vector_db_client = None
+            try:
+                if self.config.get_config('features.enable_vector_search', False):
+                    # Use dynamic import to avoid IronPython parsing issues
+                    vector_db_module = __import__('standards_chat.vector_db_client', fromlist=['VectorDBClient'])
+                    VectorDBClient = vector_db_module.VectorDBClient
+                    temp_vdb = VectorDBClient(self.config)
+                    if temp_vdb.is_developer_mode_enabled():
+                        self.vector_db_client = temp_vdb
+            except ImportError as e:
+                # Vector search packages not installed - silently fall back to keyword search
+                # This is expected if chromadb/openai packages aren't installed
+                pass
+            except Exception as e:
+                # Other errors should be logged
+                print("Vector DB initialization error: {}".format(str(e)))
+            
             # Initialize usage logger
             central_log_dir = self.config.get('logging', 'central_log_dir')
             self.usage_logger = UsageLogger(
@@ -123,6 +143,16 @@ class StandardsChatWindow(Window):
             
             # Initialize history manager
             self.history_manager = HistoryManager()
+            
+            # Load SharePoint index if available
+            self.sharepoint_index = []
+            try:
+                index_path = os.path.join(self.config.config_dir, 'sharepoint_index.json')
+                if os.path.exists(index_path):
+                    with open(index_path, 'r') as f:
+                        self.sharepoint_index = json.load(f)
+            except Exception as e:
+                print("Error loading SharePoint index: {}".format(str(e)))
             
         except Exception as e:
             # Show error in status
@@ -175,9 +205,9 @@ class StandardsChatWindow(Window):
             
             icon_path = os.path.join(
                 extension_dir,
-                'BBB.tab',
-                'Standards Assistant.panel',
-                'Standards Chat.pushbutton',
+                'Chat.tab',
+                'Kodama.panel',
+                'Kodama.pushbutton',
                 'icon.png'
             )
             
@@ -455,6 +485,16 @@ class StandardsChatWindow(Window):
         if not user_input:
             return
         
+        # Ensure we have a session id for the very first message so
+        # the usage logger doesn't write the initial entry to a
+        # file with session_id 'None'. Create a new session if needed.
+        if not self.current_session_id:
+            try:
+                self.current_session_id = self.history_manager.create_new_session()
+            except Exception:
+                # Fallback: leave as None (usage_logger will handle), but this should not happen
+                pass
+        
         # Clear active action button when starting new query
         self.active_action_button = None
         
@@ -467,11 +507,35 @@ class StandardsChatWindow(Window):
         if self.config.get('features', 'include_context', default=True):
             revit_context = extract_revit_context()
         
-        # Capture screenshot if enabled
+        # Capture screenshot if enabled via toggle
         from .utils import capture_revit_screenshot
         screenshot_base64 = None
-        if self.config.get('features', 'include_screenshot', default=True):
-            screenshot_base64 = capture_revit_screenshot()
+        
+        # Check toggle state
+        include_screenshot = False
+        if hasattr(self, 'ScreenshotToggle'):
+            include_screenshot = self.ScreenshotToggle.IsChecked == True
+            
+            # Reset toggle after capturing intent
+            if include_screenshot:
+                self.ScreenshotToggle.IsChecked = False
+        else:
+            # Fallback to config
+            include_screenshot = self.config.get('features', 'include_screenshot', default=True)
+            
+        if include_screenshot:
+            # Hide window briefly to capture clean screenshot of Revit
+            self.Hide()
+            # Allow UI to update
+            System.Windows.Forms.Application.DoEvents()
+            time.sleep(0.2)
+            
+            try:
+                screenshot_base64 = capture_revit_screenshot()
+            finally:
+                # Ensure window comes back
+                self.Show()
+                self.Activate()
         
         # Clear input
         self.input_textbox.Clear()
@@ -493,10 +557,38 @@ class StandardsChatWindow(Window):
                 # Update status: Searching
                 self.update_typing_status("Searching BBB's Revit standards...")
                 
-                # Search standards
+                # Extract keywords using index
+                search_query = user_input
+                keyword_tokens_in = 0
+                keyword_tokens_out = 0
+                
+                if hasattr(self, 'sharepoint_index') and self.sharepoint_index:
+                    # self.update_typing_status("Optimizing search query...")
+                    keyword_result = self.anthropic.get_search_keywords(user_input, self.sharepoint_index)
+                    
+                    if isinstance(keyword_result, dict):
+                        search_query = keyword_result.get('keywords', user_input)
+                        keyword_tokens_in = keyword_result.get('input_tokens', 0)
+                        keyword_tokens_out = keyword_result.get('output_tokens', 0)
+                    else:
+                        search_query = keyword_result
+                    
+                    # print("DEBUG: Optimized query: {}".format(search_query))
+                
+                # Search standards - use vector search if available
                 # print("DEBUG: Calling search_standards")
-                relevant_pages = self.standards_client.search_standards(user_input)
-                # print("DEBUG: search_standards returned {} pages".format(len(relevant_pages)))
+                if self.vector_db_client is not None:
+                    # Use hybrid vector search (semantic + keyword)
+                    self.update_typing_status("Performing semantic search...")
+                    relevant_pages = self.vector_db_client.hybrid_search(
+                        query=user_input,  # Use original user input for semantic search
+                        deduplicate=True
+                    )
+                    # print("DEBUG: Vector search returned {} pages".format(len(relevant_pages)))
+                else:
+                    # Fall back to standard SharePoint keyword search
+                    relevant_pages = self.standards_client.search_standards(search_query)
+                    # print("DEBUG: search_standards returned {} pages".format(len(relevant_pages)))
                 
                 # Update status: Found results
                 if relevant_pages:
@@ -526,6 +618,28 @@ class StandardsChatWindow(Window):
                     screenshot_base64=screenshot_base64
                 )
                 
+                # Extract URLs from sources
+                source_urls = []
+                sources = response.get('sources', [])
+                if sources:
+                    for s in sources:
+                        # Handle dictionary (most likely format)
+                        if isinstance(s, dict):
+                            url = s.get('url') or s.get('source')
+                            if url: source_urls.append(url)
+                        # Handle object with metadata
+                        elif hasattr(s, 'metadata'):
+                            url = s.metadata.get('source') or s.metadata.get('url')
+                            if url: source_urls.append(url)
+                        elif isinstance(s, str):
+                            source_urls.append(s)
+
+                # Extract token counts and model
+                # Add tokens from keyword extraction step
+                input_tokens = response.get('input_tokens', 0) + keyword_tokens_in
+                output_tokens = response.get('output_tokens', 0) + keyword_tokens_out
+                ai_model = response.get('model', 'unknown')
+
                 # Calculate duration and log interaction
                 duration_seconds = time.time() - query_start_time
                 try:
@@ -536,7 +650,11 @@ class StandardsChatWindow(Window):
                         duration_seconds=duration_seconds,
                         revit_context=revit_context,
                         session_id=self.current_session_id,
-                        screenshot_base64=screenshot_base64
+                        screenshot_base64=screenshot_base64,
+                        source_urls=source_urls,
+                        input_tokens=input_tokens,
+                        output_tokens=output_tokens,
+                        ai_model=ai_model
                     )
                 except Exception as log_error:
                     # print("Error logging interaction: {}".format(str(log_error)))
@@ -1015,31 +1133,83 @@ class StandardsChatWindow(Window):
             if i > 0:
                 textblock.Inlines.Add(Run("\n"))
             
-            # Handle bold **text**
-            if '**' in line:
-                parts = re.split(r'(\*\*.*?\*\*)', line)
-                for part in parts:
-                    if part.startswith('**') and part.endswith('**'):
-                        run = Run(part[2:-2])
-                        run.FontWeight = System.Windows.FontWeights.Bold
-                        textblock.Inlines.Add(run)
-                    elif part:
-                        textblock.Inlines.Add(Run(part))
-            # Handle bullet points
-            elif line.strip().startswith('- ') or line.strip().startswith('* '):
-                textblock.Inlines.Add(Run("  " + line.strip()))
-            # Handle numbered lists
-            elif re.match(r'^\d+\.\s', line.strip()):
-                textblock.Inlines.Add(Run("  " + line.strip()))
             # Handle headers (make bold and slightly larger)
-            elif line.strip().startswith('#'):
+            if line.strip().startswith('#'):
                 header_text = line.strip().lstrip('#').strip()
                 run = Run("\n" + header_text + "\n")
                 run.FontWeight = System.Windows.FontWeights.Bold
                 run.FontSize = 15
                 textblock.Inlines.Add(run)
-            else:
-                textblock.Inlines.Add(Run(line))
+                continue
+                
+            # Handle bullet points
+            prefix = ""
+            content = line
+            if line.strip().startswith('- ') or line.strip().startswith('* '):
+                prefix = "  • "
+                content = line.strip()[2:]
+            # Handle numbered lists
+            elif re.match(r'^\d+\.\s', line.strip()):
+                match = re.match(r'^(\d+\.\s)(.*)', line.strip())
+                prefix = "  " + match.group(1)
+                content = match.group(2)
+            
+            if prefix:
+                textblock.Inlines.Add(Run(prefix))
+            
+            # Process inline formatting (Bold and Links)
+            # Regex for markdown links: [text](url)
+            link_pattern = r'(\[[^\]]+\]\([^)]+\))'
+            parts = re.split(link_pattern, content)
+            
+            for part in parts:
+                # Check if it's a markdown link
+                link_match = re.match(r'\[([^\]]+)\]\(([^)]+)\)', part)
+                if link_match:
+                    link_text = link_match.group(1)
+                    link_url = link_match.group(2)
+                    
+                    hyperlink = Hyperlink()
+                    hyperlink.Inlines.Add(Run(link_text))
+                    try:
+                        hyperlink.NavigateUri = System.Uri(link_url)
+                        hyperlink.RequestNavigate += self.on_hyperlink_click
+                        hyperlink.Foreground = self.FindResource("PrimaryColor")
+                        textblock.Inlines.Add(hyperlink)
+                    except:
+                        textblock.Inlines.Add(Run(link_text))
+                else:
+                    # Check for raw URLs in the text part
+                    # Regex for raw URLs: http://... or https://...
+                    url_pattern = r'(https?://[^\s]+)'
+                    sub_parts = re.split(url_pattern, part)
+                    
+                    for sub_part in sub_parts:
+                        if re.match(url_pattern, sub_part):
+                            # It's a raw URL
+                            hyperlink = Hyperlink()
+                            hyperlink.Inlines.Add(Run(sub_part)) # Display the URL itself
+                            try:
+                                hyperlink.NavigateUri = System.Uri(sub_part)
+                                hyperlink.RequestNavigate += self.on_hyperlink_click
+                                hyperlink.Foreground = self.FindResource("PrimaryColor")
+                                textblock.Inlines.Add(hyperlink)
+                            except:
+                                textblock.Inlines.Add(Run(sub_part))
+                        else:
+                            # Process bold in non-link text
+                            if '**' in sub_part:
+                                bold_parts = re.split(r'(\*\*.*?\*\*)', sub_part)
+                                for bold_part in bold_parts:
+                                    if bold_part.startswith('**') and bold_part.endswith('**'):
+                                        run = Run(bold_part[2:-2])
+                                        run.FontWeight = System.Windows.FontWeights.Bold
+                                        textblock.Inlines.Add(run)
+                                    elif bold_part:
+                                        textblock.Inlines.Add(Run(bold_part))
+                            else:
+                                if sub_part:
+                                    textblock.Inlines.Add(Run(sub_part))
     
     def on_hyperlink_click(self, sender, args):
         """Open hyperlink in browser"""

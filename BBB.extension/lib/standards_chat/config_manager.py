@@ -48,6 +48,53 @@ class ConfigManager:
         except KeyError:
             return default
     
+    def get_config(self, key_path, default=None):
+        """
+        Get configuration value using dot notation for nested keys.
+        
+        Args:
+            key_path: Dot-separated path to config value (e.g. 'vector_search.chunk_size')
+            default: Default value if key not found
+            
+        Returns:
+            Configuration value or default
+        """
+        keys = key_path.split('.')
+        value = self.config
+        
+        try:
+            for key in keys:
+                value = value[key]
+            return value
+        except (KeyError, TypeError):
+            return default
+    
+    def set_config(self, key_path, value):
+        """
+        Set configuration value using dot notation for nested keys.
+        
+        Args:
+            key_path: Dot-separated path to config value (e.g. 'vector_search.last_sync_timestamp')
+            value: Value to set
+        """
+        keys = key_path.split('.')
+        config = self.config
+        
+        # Navigate to parent
+        for key in keys[:-1]:
+            if key not in config:
+                config[key] = {}
+            config = config[key]
+        
+        # Set value
+        config[keys[-1]] = value
+    
+    def save(self):
+        """Save current configuration to config.json"""
+        filepath = os.path.join(self.config_dir, 'config.json')
+        with open(filepath, 'w') as f:
+            json.dump(self.config, f, indent=2)
+    
     def get_api_key(self, service):
         """Get API key for a service"""
         key_name = "{}_api_key".format(service)

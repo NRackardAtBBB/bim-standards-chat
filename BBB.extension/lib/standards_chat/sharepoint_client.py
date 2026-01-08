@@ -6,14 +6,22 @@ Handles all interactions with Microsoft Graph API for SharePoint
 
 import json
 import time
-import clr
-clr.AddReference('System')
-clr.AddReference('System.Net.Http')
 
-import System
-from System.Net.Http import HttpClient, HttpRequestMessage, HttpMethod, StringContent, ByteArrayContent
-from System.Net.Http.Headers import MediaTypeWithQualityHeaderValue, AuthenticationHeaderValue
-from System.Text import Encoding
+# Try to import IronPython .NET bridge (for pyRevit/IronPython)
+# Fall back to standard Python requests if not available
+try:
+    import clr
+    clr.AddReference('System')
+    clr.AddReference('System.Net.Http')
+    import System
+    from System.Net.Http import HttpClient, HttpRequestMessage, HttpMethod, StringContent, ByteArrayContent
+    from System.Net.Http.Headers import MediaTypeWithQualityHeaderValue, AuthenticationHeaderValue
+    from System.Text import Encoding
+    USE_DOTNET = True
+except ImportError:
+    # Running in standard Python (not IronPython)
+    import requests
+    USE_DOTNET = False
 
 class SharePointClient:
     """Client for interacting with SharePoint via Microsoft Graph API"""
@@ -36,11 +44,16 @@ class SharePointClient:
         self._token_expires_at = 0
         self._site_id = None
         
-        # Create HTTP client
-        self.client = HttpClient()
-        self.client.DefaultRequestHeaders.Accept.Add(
-            MediaTypeWithQualityHeaderValue("application/json")
-        )
+        # Create HTTP client (either .NET or requests)
+        if USE_DOTNET:
+            self.client = HttpClient()
+            self.client.DefaultRequestHeaders.Accept.Add(
+                MediaTypeWithQualityHeaderValue("application/json")
+            )
+        else:
+            # Using Python requests library
+            self.session = requests.Session()
+            self.session.headers.update({'Accept': 'application/json'})
 
     def _url_encode(self, s):
         """Simple URL encoding to avoid System.Uri issues"""
@@ -117,47 +130,66 @@ class SharePointClient:
             
         try:
             self._log_debug("Requesting new token")
-            # Prepare request for client credentials flow
-            content = [
-                ("client_id", self.client_id),
-                ("scope", "https://graph.microsoft.com/.default"),
-                ("client_secret", self.client_secret),
-                ("grant_type", "client_credentials")
-            ]
             
-            # Convert to form url encoded content manually
-            # Use custom url encode to avoid .NET casting issues
-            post_data = "&".join(["{}={}".format(k, self._url_encode(v)) for k, v in content])
-            self._log_debug("post_data prepared")
-            
-            request = HttpRequestMessage(HttpMethod.Post, self.token_url)
-            
-            # Use ByteArrayContent to avoid string encoding issues
-            self._log_debug("Creating ByteArrayContent for token request")
-            bytes_data = Encoding.UTF8.GetBytes(System.String(post_data))
-            content_obj = ByteArrayContent(bytes_data)
-            content_obj.Headers.ContentType = MediaTypeWithQualityHeaderValue("application/x-www-form-urlencoded")
-            request.Content = content_obj
-            
-            self._log_debug("Sending token request")
-            response = self.client.SendAsync(request).Result
-            self._log_debug("Token response received: {}".format(response.StatusCode))
-            
-            if not response.IsSuccessStatusCode:
-                error_content = response.Content.ReadAsStringAsync().Result
-                self._log_debug("Token Error Content: {}".format(error_content))
-            
-            response.EnsureSuccessStatusCode()
-            
-            response_content = response.Content.ReadAsStringAsync().Result
-            data = json.loads(response_content)
+            if USE_DOTNET:
+                # .NET HttpClient approach
+                content = [
+                    ("client_id", self.client_id),
+                    ("scope", "https://graph.microsoft.com/.default"),
+                    ("client_secret", self.client_secret),
+                    ("grant_type", "client_credentials")
+                ]
+                
+                post_data = "&".join(["{}={}".format(k, self._url_encode(v)) for k, v in content])
+                self._log_debug("post_data prepared")
+                
+                request = HttpRequestMessage(HttpMethod.Post, self.token_url)
+                
+                bytes_data = Encoding.UTF8.GetBytes(System.String(post_data))
+                content_obj = ByteArrayContent(bytes_data)
+                content_obj.Headers.ContentType = MediaTypeWithQualityHeaderValue("application/x-www-form-urlencoded")
+                request.Content = content_obj
+                
+                self._log_debug("Sending token request")
+                response = self.client.SendAsync(request).Result
+                self._log_debug("Token response received: {}".format(response.StatusCode))
+                
+                if not response.IsSuccessStatusCode:
+                    error_content = response.Content.ReadAsStringAsync().Result
+                    self._log_debug("Token Error Content: {}".format(error_content))
+                
+                response.EnsureSuccessStatusCode()
+                response_content = response.Content.ReadAsStringAsync().Result
+                data = json.loads(response_content)
+            else:
+                # Python requests approach
+                data_payload = {
+                    'client_id': self.client_id,
+                    'scope': 'https://graph.microsoft.com/.default',
+                    'client_secret': self.client_secret,
+                    'grant_type': 'client_credentials'
+                }
+                
+                self._log_debug("Sending token request")
+                response = self.session.post(
+                    self.token_url,
+                    data=data_payload,
+                    headers={'Content-Type': 'application/x-www-form-urlencoded'}
+                )
+                self._log_debug("Token response received: {}".format(response.status_code))
+                response.raise_for_status()
+                data = response.json()
             
             self._access_token = data['access_token']
             expires_in = int(data.get('expires_in', 3600))
             self._token_expires_at = current_time + expires_in
             
             # Update client headers
-            self.client.DefaultRequestHeaders.Authorization = AuthenticationHeaderValue("Bearer", self._access_token)
+            if USE_DOTNET:
+                self.client.DefaultRequestHeaders.Authorization = AuthenticationHeaderValue("Bearer", self._access_token)
+            else:
+                self.session.headers.update({'Authorization': 'Bearer {}'.format(self._access_token)})
+            
             self._log_debug("Token updated successfully")
             
             return self._access_token
@@ -186,21 +218,35 @@ class SharePointClient:
             self._log_debug("Looking up site ID")
             # Parse hostname and path from URL
             # URL format: https://hostname/sites/sitename
-            uri = System.Uri(System.String(self.site_url))
-            hostname = uri.Host
-            site_path = uri.AbsolutePath.strip('/')
+            
+            if USE_DOTNET:
+                uri = System.Uri(System.String(self.site_url))
+                hostname = uri.Host
+                site_path = uri.AbsolutePath.strip('/')
+            else:
+                from urllib.parse import urlparse
+                parsed = urlparse(self.site_url)
+                hostname = parsed.hostname
+                site_path = parsed.path.strip('/')
             
             url = "{}/sites/{}:/{}".format(self.base_url, hostname, site_path)
             self._log_debug("Site lookup URL: {}".format(url))
             
-            request = HttpRequestMessage(HttpMethod.Get, System.String(url))
-            self._log_debug("Sending site ID request")
-            response = self.client.SendAsync(request).Result
-            self._log_debug("Site ID response: {}".format(response.StatusCode))
-            response.EnsureSuccessStatusCode()
-            
-            content = response.Content.ReadAsStringAsync().Result
-            data = json.loads(content)
+            if USE_DOTNET:
+                request = HttpRequestMessage(HttpMethod.Get, System.String(url))
+                self._log_debug("Sending site ID request")
+                response = self.client.SendAsync(request).Result
+                self._log_debug("Site ID response: {}".format(response.StatusCode))
+                response.EnsureSuccessStatusCode()
+                
+                content = response.Content.ReadAsStringAsync().Result
+                data = json.loads(content)
+            else:
+                self._log_debug("Sending site ID request")
+                response = self.session.get(url)
+                self._log_debug("Site ID response: {}".format(response.status_code))
+                response.raise_for_status()
+                data = response.json()
             
             self._site_id = data['id']
             self._log_debug("Site ID found: {}".format(self._site_id))
@@ -211,6 +257,56 @@ class SharePointClient:
             import traceback
             # traceback.print_exc()
             raise
+
+    def get_all_pages_metadata(self):
+        """
+        Get metadata for all pages in the site (for indexing)
+        Returns list of dicts with title, description, url
+        """
+        self._log_debug("get_all_pages_metadata started")
+        try:
+            self._get_access_token()
+            site_id = self._get_site_id()
+            
+            # Get pages from the Site Pages library
+            # We want title, description, and webUrl
+            # Note: The 'pages' endpoint is a beta/v1.0 feature that simplifies this
+            url = "{}/sites/{}/pages?$select=id,title,description,webUrl".format(self.base_url, site_id)
+            self._log_debug("Listing all pages from {}".format(url))
+            
+            if USE_DOTNET:
+                request = HttpRequestMessage(HttpMethod.Get, System.String(url))
+                response = self.client.SendAsync(request).Result
+                
+                if not response.IsSuccessStatusCode:
+                    self._log_debug("Failed to list pages: {}".format(response.StatusCode))
+                    return []
+                    
+                content = response.Content.ReadAsStringAsync().Result
+                data = json.loads(content)
+            else:
+                response = self.session.get(url)
+                
+                if not response.ok:
+                    self._log_debug("Failed to list pages: {}".format(response.status_code))
+                    return []
+                    
+                data = response.json()
+            
+            pages = []
+            for page in data.get('value', []):
+                pages.append({
+                    'title': page.get('title'),
+                    'description': page.get('description'),
+                    'url': page.get('webUrl')
+                })
+                
+            self._log_debug("Found {} pages for index".format(len(pages)))
+            return pages
+            
+        except Exception as e:
+            self._log_debug("Error getting pages metadata: {}".format(str(e)))
+            return []
 
     def search_standards(self, query, max_results=5):
         """
@@ -413,31 +509,42 @@ class SharePointClient:
         if not canvas:
             return ""
         
-        # Check horizontal sections
-        h_sections = canvas.get("horizontalSections", [])
-        
-        for section in h_sections:
-            columns = section.get("columns", [])
-            for column in columns:
-                webparts = column.get("webparts", [])
-                for webpart in webparts:
-                    wp_type = webpart.get("@odata.type")
-                    
-                    if wp_type == "#microsoft.graph.textWebPart":
-                        inner_html = webpart.get("innerHtml", "")
-                        text = self._strip_html(inner_html)
-                        if text:
-                            text_parts.append(text)
-        
-        # Check vertical section (if exists)
-        vertical_section = canvas.get("verticalSection")
-        if vertical_section:
-            for webpart in vertical_section.get("webparts", []):
-                 if webpart.get("@odata.type") == "#microsoft.graph.textWebPart":
+        # Helper to process webparts
+        def process_webparts(webparts):
+            for webpart in webparts:
+                wp_type = webpart.get("@odata.type")
+                # self._log_debug("Found webpart type: {}".format(wp_type))
+                
+                if wp_type == "#microsoft.graph.textWebPart":
                     inner_html = webpart.get("innerHtml", "")
                     text = self._strip_html(inner_html)
                     if text:
                         text_parts.append(text)
+                # Handle other web parts that might contain text
+                elif wp_type == "#microsoft.graph.standardWebPart":
+                    # Sometimes text is in properties
+                    props = webpart.get("data", {}).get("properties", {})
+                    if props:
+                        # Check common text fields
+                        for key in ['text', 'content', 'description', 'title']:
+                            if key in props:
+                                val = props[key]
+                                if isinstance(val, str):
+                                    text = self._strip_html(val)
+                                    if text:
+                                        text_parts.append(text)
+
+        # Check horizontal sections
+        h_sections = canvas.get("horizontalSections", [])
+        for section in h_sections:
+            columns = section.get("columns", [])
+            for column in columns:
+                process_webparts(column.get("webparts", []))
+        
+        # Check vertical section (if exists)
+        vertical_section = canvas.get("verticalSection")
+        if vertical_section:
+            process_webparts(vertical_section.get("webparts", []))
 
         return "\n\n".join(text_parts)
 
@@ -478,3 +585,130 @@ class SharePointClient:
         import re
         clean = re.compile('<.*?>')
         return re.sub(clean, '', html)
+    
+    def sync_to_vector_db(self, vector_db_client, progress_callback=None):
+        """
+        Sync all SharePoint pages to the vector database.
+        
+        Args:
+            vector_db_client: VectorDBClient instance to index documents into
+            progress_callback: Optional callback function(message, current, total) for progress updates
+            
+        Returns:
+            Dict with sync results including document count, chunk count, and timestamp
+        """
+        from datetime import datetime
+        
+        try:
+            # Update progress
+            if progress_callback:
+                progress_callback("Fetching SharePoint pages...", 0, 100)
+            
+            # Get all pages
+            pages = self.get_all_pages_metadata()
+            total_pages = len(pages)
+            
+            if total_pages == 0:
+                return {
+                    'success': False,
+                    'error': 'No pages found to index',
+                    'documents': 0,
+                    'chunks': 0,
+                    'timestamp': None
+                }
+            
+            if progress_callback:
+                progress_callback("Fetching page content...", 10, 100)
+            
+            # Fetch full content for each page
+            documents = []
+            for i, page in enumerate(pages):
+                try:
+                    # Extract page ID from URL
+                    page_url = page.get('url', '')
+                    if not page_url:
+                        continue
+                    
+                    # Get site ID and list ID (we already have them)
+                    # Parse page name from URL
+                    page_name = page_url.split('/')[-1]
+                    
+                    # Use search to get full page details
+                    # For now, we'll use the description as content if available
+                    # In production, you'd want to fetch full page content via get_page_content
+                    content = page.get('description', '')
+                    
+                    if content:
+                        documents.append({
+                            'id': page_url,  # Use URL as unique ID
+                            'title': page.get('title', 'Untitled'),
+                            'url': page_url,
+                            'content': content,
+                            'category': 'SharePoint Page',
+                            'last_updated': datetime.now().isoformat()
+                        })
+                    
+                    # Update progress
+                    if progress_callback:
+                        progress_percent = 10 + int((i + 1) / float(total_pages) * 30)
+                        progress_callback(
+                            "Processed {}/{} pages".format(i + 1, total_pages),
+                            progress_percent,
+                            100
+                        )
+                
+                except Exception as e:
+                    self._log_debug("Error processing page {}: {}".format(page.get('title', 'Unknown'), str(e)))
+                    continue
+            
+            if not documents:
+                return {
+                    'success': False,
+                    'error': 'No valid documents found to index',
+                    'documents': 0,
+                    'chunks': 0,
+                    'timestamp': None
+                }
+            
+            if progress_callback:
+                progress_callback("Clearing existing index...", 45, 100)
+            
+            # Clear existing collection
+            vector_db_client.clear_collection()
+            
+            if progress_callback:
+                progress_callback("Generating embeddings and indexing...", 50, 100)
+            
+            # Index documents (this will chunk them internally)
+            index_stats = vector_db_client.index_documents(documents)
+            
+            if progress_callback:
+                progress_callback("Sync complete!", 100, 100)
+            
+            # Update config with sync stats
+            sync_timestamp = datetime.now().isoformat()
+            self.config.set_config('vector_search.last_sync_timestamp', sync_timestamp)
+            self.config.set_config('vector_search.indexed_document_count', index_stats['documents'])
+            self.config.set_config('vector_search.indexed_chunk_count', index_stats['chunks'])
+            self.config.save()
+            
+            return {
+                'success': True,
+                'documents': index_stats['documents'],
+                'chunks': index_stats['chunks'],
+                'timestamp': sync_timestamp
+            }
+            
+        except Exception as e:
+            error_msg = "Sync failed: {}".format(str(e))
+            self._log_debug(error_msg)
+            if progress_callback:
+                progress_callback(error_msg, 0, 100)
+            
+            return {
+                'success': False,
+                'error': error_msg,
+                'documents': 0,
+                'chunks': 0,
+                'timestamp': None
+            }

@@ -1,4 +1,4 @@
-# Testing Checklist - BBB Standards Assistant
+# Testing Checklist - Kodama
 
 Use this checklist to verify the extension is working correctly.
 
@@ -68,7 +68,7 @@ Use this checklist to verify the extension is working correctly.
 
 **Expected Results:**
 - [ ] Chat window opens within 2 seconds
-- [ ] Window title is "BBB Standards Assistant"
+- [ ] Window title is "Kodama"
 - [ ] Welcome message is visible
 - [ ] Input box is present at bottom
 - [ ] Send button is present and enabled

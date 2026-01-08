@@ -64,7 +64,8 @@ class UsageLogger:
         self.user_id = self._get_anonymous_user_id()
     
     def log_interaction(self, query, response_preview, source_count, 
-                       duration_seconds, revit_context=None, session_id=None, screenshot_base64=None):
+                       duration_seconds, revit_context=None, session_id=None, screenshot_base64=None, source_urls=None,
+                       input_tokens=0, output_tokens=0, ai_model=None):
         """
         Log a chat interaction
         
@@ -76,6 +77,10 @@ class UsageLogger:
             revit_context: Dict of Revit context (optional)
             session_id: Unique session identifier
             screenshot_base64: Base64 encoded screenshot string
+            source_urls: List of source URLs
+            input_tokens: Number of input tokens
+            output_tokens: Number of output tokens
+            ai_model: Claude model used (e.g., 'claude-3-5-sonnet-20241022')
         """
         timestamp = datetime.utcnow().isoformat()
         
@@ -88,7 +93,12 @@ class UsageLogger:
             'query_length': len(query),
             'response_preview': response_preview[:100] if response_preview else '',
             'source_count': source_count,
+            'source_urls': source_urls or [],
             'duration_seconds': round(duration_seconds, 2),
+            'input_tokens': input_tokens,
+            'output_tokens': output_tokens,
+            'total_tokens': input_tokens + output_tokens,
+            'ai_model': ai_model,
             'has_revit_context': revit_context is not None
         }
         
@@ -122,7 +132,12 @@ class UsageLogger:
                 'query': query,
                 'response': response_preview, # Full response requested
                 'source_count': source_count,
+                'source_urls': source_urls or [],
                 'duration_seconds': round(duration_seconds, 2),
+                'input_tokens': input_tokens,
+                'output_tokens': output_tokens,
+                'total_tokens': input_tokens + output_tokens,
+                'ai_model': ai_model,
                 'model_name': revit_context.get('project_name') if revit_context else None,
                 'view_name': revit_context.get('active_view') if revit_context else None,
                 'selection_count': revit_context.get('selection_count', 0) if revit_context else 0,
@@ -153,6 +168,10 @@ class UsageLogger:
                 except:
                     pass
             
+            # Ensure session_id is usable (fallback to timestamp if None)
+            if not session_id:
+                session_id = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+
             # Create session filename: YYYY-MM-DD_Username_SessionID.json
             date_str = datetime.now().strftime('%Y-%m-%d')
             safe_username = "".join([c for c in username if c.isalnum() or c in (' ', '.', '_')]).strip()

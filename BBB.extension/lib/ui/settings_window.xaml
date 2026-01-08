@@ -1,6 +1,6 @@
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Standards Assistant Settings" 
+        Title="Kodama Settings" 
         Width="600" Height="700"
         WindowStartupLocation="CenterScreen"
         ResizeMode="NoResize"
@@ -154,6 +154,43 @@
                                   Content="Enable multi-step workflows" 
                                   FontWeight="Normal"
                                   ToolTip="Allow the assistant to suggest and execute complex multi-step workflows"/>
+                        
+                        <CheckBox x:Name="enable_vector_search" 
+                                  Content="Enable semantic search (Developer Preview)" 
+                                  FontWeight="Normal"
+                                  ToolTip="Use AI-powered semantic search for more relevant results"
+                                  Checked="vector_search_checked"
+                                  Unchecked="vector_search_unchecked"/>
+                    </StackPanel>
+                </GroupBox>
+                
+                <!-- Vector Search Section (Developer Only) -->
+                <GroupBox x:Name="vector_search_group" Header="Semantic Search (Developer Preview)" Visibility="Collapsed">
+                    <StackPanel>
+                        <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="{StaticResource TextSecondaryColor}">
+                            Semantic search uses AI embeddings to find conceptually similar content, providing more relevant results than keyword matching alone.
+                        </TextBlock>
+                        
+                        <TextBlock x:Name="sync_status_text" 
+                                   Text="Not synced yet" 
+                                   FontSize="11" 
+                                   Foreground="{StaticResource TextSecondaryColor}"
+                                   Margin="0,5,0,0"/>
+                        
+                        <Grid Margin="0,15,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Margin="0,0,10,0">
+                                <TextBlock Text="Documents Indexed:" FontWeight="SemiBold" FontSize="11"/>
+                                <TextBlock x:Name="indexed_docs_text" Text="0" FontSize="20" Foreground="{StaticResource PrimaryColor}"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Text="Text Chunks:" FontWeight="SemiBold" FontSize="11"/>
+                                <TextBlock x:Name="indexed_chunks_text" Text="0" FontSize="20" Foreground="{StaticResource PrimaryColor}"/>
+                            </StackPanel>
+                        </Grid>
                     </StackPanel>
                 </GroupBox>
                 
@@ -199,8 +236,14 @@
                                 <TextBlock Text="Client ID:" FontWeight="Normal" Margin="0,5,0,2"/>
                                 <TextBox x:Name="sharepoint_client_id" />
                                 <TextBlock Text="Client Secret:" FontWeight="Normal" Margin="0,5,0,2"/>
-                                <PasswordBox x:Name="sharepoint_client_secret"/>
-                             </StackPanel>
+                                <PasswordBox x:Name="sharepoint_client_secret"/>                                
+                                <Button x:Name="update_index_btn" 
+                                        Content="Update Search Index" 
+                                        HorizontalAlignment="Left"
+                                        Click="update_index_click"
+                                        Margin="0,15,0,0"
+                                        Padding="15,5"
+                                        ToolTip="Update the local index of SharePoint pages for better search results"/>                             </StackPanel>
                         </GroupBox>
 
                         <!-- Notion Configuration -->

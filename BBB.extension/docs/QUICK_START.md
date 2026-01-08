@@ -1,4 +1,4 @@
-# Quick Start Guide - BBB Standards Assistant
+# Quick Start Guide - Kodama
 
 Get up and running in 10 minutes!
 

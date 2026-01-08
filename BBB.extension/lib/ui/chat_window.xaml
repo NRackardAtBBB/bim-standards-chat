@@ -1,6 +1,6 @@
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="BBB Standards Assistant" 
+        Title="Kodama" 
         Height="750" Width="500"
         MinHeight="500" MinWidth="400"
         WindowStartupLocation="CenterScreen"
@@ -222,7 +222,7 @@
                 
                 <!-- Title and Status -->
                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                    <TextBlock Text="BBB Standards Assistant" 
+                    <TextBlock Text="Kodama" 
                               FontSize="16" 
                               FontWeight="SemiBold" 
                               Foreground="{StaticResource TextPrimaryColor}"/>
@@ -309,11 +309,49 @@
             
             <Grid>
                 <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 
-                <Border Grid.Column="0" 
+                <ToggleButton x:Name="ScreenshotToggle"
+                              Grid.Column="0"
+                              Width="36"
+                              Height="36"
+                              Margin="0,0,10,0"
+                              VerticalAlignment="Bottom"
+                              Background="Transparent"
+                              BorderBrush="{StaticResource BorderColor}"
+                              BorderThickness="1"
+                              ToolTip="Include Screenshot">
+                    <ToggleButton.Template>
+                        <ControlTemplate TargetType="ToggleButton">
+                            <Border x:Name="border" 
+                                    Background="{TemplateBinding Background}" 
+                                    BorderBrush="{TemplateBinding BorderBrush}" 
+                                    BorderThickness="{TemplateBinding BorderThickness}" 
+                                    CornerRadius="4">
+                                <Viewbox Width="16" Height="16">
+                                    <Path x:Name="icon"
+                                          Fill="{StaticResource TextSecondaryColor}"
+                                          Data="M9,2L7.17,4H4A2,2 0 0,0 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V6A2,2 0 0,0 20,4H16.83L14.83,2H9M12,17A5,5 0 0,1 7,12A5,5 0 0,1 12,7A5,5 0 0,1 17,12A5,5 0 0,1 12,17Z"/>
+                                </Viewbox>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsChecked" Value="True">
+                                    <Setter TargetName="border" Property="Background" Value="#E1DFDD"/>
+                                    <Setter TargetName="border" Property="BorderBrush" Value="{StaticResource PrimaryColor}"/>
+                                    <Setter TargetName="icon" Property="Fill" Value="{StaticResource PrimaryColor}"/>
+                                </Trigger>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="border" Property="Background" Value="#F3F2F1"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </ToggleButton.Template>
+                </ToggleButton>
+
+                <Border Grid.Column="1" 
                         BorderBrush="{StaticResource BorderColor}" 
                         BorderThickness="1" 
                         CornerRadius="4"
@@ -331,7 +369,7 @@
                 </Border>
                 
                 <Button x:Name="SendButton" 
-                       Grid.Column="1"
+                       Grid.Column="2"
                        Style="{StaticResource ModernButtonStyle}"
                        Content="Send"
                        Width="70"

@@ -109,6 +109,11 @@ class SettingsWindow(forms.WPFWindow):
         self.analytics_enabled.IsChecked = self.config.get('logging', {}).get('analytics_enabled', True)
         central_log = self.config.get('logging', {}).get('central_log_path', '')
         self.central_log_path.Text = central_log if central_log else ''
+        
+        # Vector Search (Developer Only)
+        self.enable_vector_search.IsChecked = self.config.get('features', {}).get('enable_vector_search', False)
+        self._update_vector_search_visibility()
+        self._update_vector_search_stats()
     
     def source_changed(self, sender, args):
         """Handle source selection change"""
@@ -118,6 +123,84 @@ class SettingsWindow(forms.WPFWindow):
         else: # Notion
             self.sharepoint_group.Visibility = System.Windows.Visibility.Collapsed
             self.notion_group.Visibility = System.Windows.Visibility.Visible
+    
+    def _is_developer_user(self):
+        """Check if current user is in developer whitelist"""
+        whitelist = self.config.get('vector_search', {}).get('developer_whitelist', [])
+        current_user = os.environ.get('USERNAME', '').lower()
+        return current_user in [u.lower() for u in whitelist]
+    
+    def _update_vector_search_visibility(self):
+        """Show/hide vector search section based on developer mode and user"""
+        developer_mode = self.config.get('vector_search', {}).get('developer_mode', True)
+        
+        # Show section if developer mode is OFF, or if user is in whitelist
+        if not developer_mode or self._is_developer_user():
+            # Show the main checkbox
+            self.enable_vector_search.Visibility = System.Windows.Visibility.Visible
+            # Show the detailed section if checkbox is checked
+            if self.enable_vector_search.IsChecked:
+                self.vector_search_group.Visibility = System.Windows.Visibility.Visible
+            else:
+                self.vector_search_group.Visibility = System.Windows.Visibility.Collapsed
+        else:
+            # Hide everything if developer mode is on and user not in whitelist
+            self.enable_vector_search.Visibility = System.Windows.Visibility.Collapsed
+            self.vector_search_group.Visibility = System.Windows.Visibility.Collapsed
+    
+    def _update_vector_search_stats(self):
+        """Update vector search statistics display"""
+        vs_config = self.config.get('vector_search', {})
+        last_sync = vs_config.get('last_sync_timestamp')
+        doc_count = vs_config.get('indexed_document_count', 0)
+        chunk_count = vs_config.get('indexed_chunk_count', 0)
+        
+        self.indexed_docs_text.Text = str(doc_count)
+        self.indexed_chunks_text.Text = str(chunk_count)
+        
+        if last_sync:
+            from datetime import datetime
+            try:
+                sync_time = datetime.fromisoformat(last_sync)
+                self.sync_status_text.Text = "Last synced: {}".format(sync_time.strftime("%Y-%m-%d %H:%M:%S"))
+            except:
+                self.sync_status_text.Text = "Last synced: {}".format(last_sync)
+        else:
+            self.sync_status_text.Text = "Not synced yet"
+    
+    def vector_search_checked(self, sender, args):
+        """Handle vector search checkbox checked"""
+        self._update_vector_search_visibility()
+    
+    def vector_search_unchecked(self, sender, args):
+        """Handle vector search checkbox unchecked"""
+        self._update_vector_search_visibility()
+    
+    def _save_config_to_disk(self):
+        """Save current settings to disk without closing dialog"""
+        # Update SharePoint config
+        if 'sharepoint' not in self.config:
+            self.config['sharepoint'] = {}
+        self.config['sharepoint']['site_url'] = self.sharepoint_site_url.Text
+        self.config['sharepoint']['tenant_id'] = self.sharepoint_tenant_id.Text
+        self.config['sharepoint']['client_id'] = self.sharepoint_client_id.Text
+        
+        # Update API keys
+        self.api_keys['sharepoint_client_secret'] = self.sharepoint_client_secret.Password
+        self.api_keys['anthropic_api_key'] = self.anthropic_api_key.Text
+        
+        # Update features
+        if 'features' not in self.config:
+            self.config['features'] = {}
+        if self.standards_source_combo.SelectedIndex == 1:
+            self.config['features']['standards_source'] = 'sharepoint'
+        
+        # Save to files
+        with open(self.api_keys_path, 'w') as f:
+            json.dump(self.api_keys, f, indent=2)
+        
+        with open(self.config_path, 'w') as f:
+            json.dump(self.config, f, indent=2)
 
     def clear_history_click(self, sender, args):
         """Clear all chat history"""
@@ -130,6 +213,71 @@ class SettingsWindow(forms.WPFWindow):
                 forms.alert("Deleted {} chat sessions.".format(count), title="Success")
             except Exception as e:
                 forms.alert("Error clearing history: {}".format(str(e)), title="Error")
+
+    def update_index_click(self, sender, args):
+        """Update SharePoint search index"""
+        try:
+            # 1. Save current settings to disk (so ConfigManager picks them up)
+            # Update Standards Source
+            if self.standards_source_combo.SelectedIndex == 1:
+                self.config['features']['standards_source'] = 'sharepoint'
+            else:
+                self.config['features']['standards_source'] = 'notion'
+                
+            # Update SharePoint config
+            if 'sharepoint' not in self.config:
+                self.config['sharepoint'] = {}
+            self.config['sharepoint']['site_url'] = self.sharepoint_site_url.Text
+            self.config['sharepoint']['tenant_id'] = self.sharepoint_tenant_id.Text
+            self.config['sharepoint']['client_id'] = self.sharepoint_client_id.Text
+            
+            # Update API keys
+            self.api_keys['sharepoint_client_secret'] = self.sharepoint_client_secret.Password
+            self.api_keys['anthropic_api_key'] = self.anthropic_api_key.Text
+            
+            # Save to files
+            with open(self.api_keys_path, 'w') as f:
+                json.dump(self.api_keys, f, indent=2)
+            
+            with open(self.config_path, 'w') as f:
+                json.dump(self.config, f, indent=2)
+            
+            # 2. Initialize Client
+            from standards_chat.config_manager import ConfigManager
+            config_manager = ConfigManager()
+            
+            from standards_chat.sharepoint_client import SharePointClient
+            client = SharePointClient(config_manager)
+            
+            # 3. Fetch Index
+            System.Windows.Input.Mouse.OverrideCursor = System.Windows.Input.Cursors.Wait
+            
+            try:
+                pages = client.get_all_pages_metadata()
+            finally:
+                System.Windows.Input.Mouse.OverrideCursor = None
+            
+            if not pages:
+                forms.alert("No pages found or error connecting to SharePoint.\nCheck your credentials and site URL.", title="Error")
+                return
+                
+            # 4. Save Index
+            index_path = os.path.join(self.config_dir, 'sharepoint_index.json')
+            with open(index_path, 'w') as f:
+                json.dump(pages, f, indent=2)
+                
+            forms.alert(
+                "Successfully indexed {} pages.\n\nThe search assistant will now use this index to find better results.".format(len(pages)),
+                title="Index Updated"
+            )
+            
+        except Exception as e:
+            System.Windows.Input.Mouse.OverrideCursor = None
+            forms.alert(
+                "Error updating index:\n{}".format(str(e)),
+                title="Error",
+                warn_icon=True
+            )
 
     def save_click(self, sender, args):
         """Save button click handler"""
@@ -146,6 +294,7 @@ class SettingsWindow(forms.WPFWindow):
             self.config['features']['include_context'] = bool(self.auto_include_context.IsChecked)
             self.config['features']['enable_actions'] = bool(self.enable_actions.IsChecked)
             self.config['features']['enable_workflows'] = bool(self.enable_workflows.IsChecked)
+            self.config['features']['enable_vector_search'] = bool(self.enable_vector_search.IsChecked)
             
             # Update Standards Source
             if self.standards_source_combo.SelectedIndex == 1:

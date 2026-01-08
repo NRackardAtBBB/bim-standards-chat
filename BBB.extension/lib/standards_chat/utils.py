@@ -18,6 +18,63 @@ except ImportError:
 
 import base64
 import io
+import ctypes
+import System.Diagnostics
+
+# Define RECT structure for Windows API
+class RECT(ctypes.Structure):
+    _fields_ = [
+        ("left", ctypes.c_long),
+        ("top", ctypes.c_long),
+        ("right", ctypes.c_long),
+        ("bottom", ctypes.c_long)
+    ]
+
+def get_revit_window_bounds():
+    """
+    Returns the bounding rectangle of the main Revit window.
+    Returns: (x, y, width, height) or None if failed.
+    """
+    try:
+        hwnd = None
+        
+        # 1. Try to get handle from pyrevit (most reliable)
+        try:
+            if 'revit' in globals() and hasattr(revit, 'uiapp'):
+                hwnd = revit.uiapp.MainWindowHandle
+        except Exception:
+            pass
+            
+        # 2. Fallback to process main window if it looks like Revit
+        if not hwnd:
+            process = System.Diagnostics.Process.GetCurrentProcess()
+            # Only use if title indicates it's Revit (avoids capturing plugin windows)
+            if "Revit" in process.MainWindowTitle:
+                hwnd = process.MainWindowHandle
+        
+        # Check if we got a valid handle
+        if not hwnd or (hasattr(hwnd, 'ToInt64') and hwnd.ToInt64() == 0):
+            return None
+            
+        # Handle IntPtr if needed
+        hwnd_val = hwnd.ToInt64() if hasattr(hwnd, 'ToInt64') else hwnd
+
+        # Prepare ctypes to call GetWindowRect from user32.dll
+        user32 = ctypes.windll.user32
+        rect = RECT()
+        
+        # Call the API
+        result = user32.GetWindowRect(hwnd_val, ctypes.byref(rect))
+        
+        if result:
+            width = rect.right - rect.left
+            height = rect.bottom - rect.top
+            return (rect.left, rect.top, width, height)
+            
+    except Exception as e:
+        print("Error getting window bounds: {}".format(str(e)))
+        
+    return None
 
 
 def capture_revit_screenshot():
@@ -39,9 +96,22 @@ def capture_revit_screenshot():
         from System.IO import MemoryStream
         import time
         
-        # Get primary screen bounds
-        screen = Forms.Screen.PrimaryScreen
-        bounds = screen.Bounds
+        # Get Revit window bounds
+        bounds_rect = get_revit_window_bounds()
+        
+        if bounds_rect:
+            x, y, width, height = bounds_rect
+            # Ensure valid dimensions
+            if width <= 0 or height <= 0:
+                # Fallback to primary screen
+                screen = Forms.Screen.PrimaryScreen
+                x, y = 0, 0
+                width, height = screen.Bounds.Width, screen.Bounds.Height
+        else:
+            # Fallback to primary screen
+            screen = Forms.Screen.PrimaryScreen
+            x, y = 0, 0
+            width, height = screen.Bounds.Width, screen.Bounds.Height
         
         # Retry logic for clipboard conflicts
         max_retries = 3
@@ -50,9 +120,9 @@ def capture_revit_screenshot():
         for attempt in range(max_retries):
             try:
                 # Create bitmap and capture screen
-                bitmap = Bitmap(bounds.Width, bounds.Height)
+                bitmap = Bitmap(width, height)
                 graphics = System.Drawing.Graphics.FromImage(bitmap)
-                graphics.CopyFromScreen(0, 0, 0, 0, bitmap.Size)
+                graphics.CopyFromScreen(x, y, 0, 0, bitmap.Size)
                 
                 # Convert to base64
                 stream = MemoryStream()
