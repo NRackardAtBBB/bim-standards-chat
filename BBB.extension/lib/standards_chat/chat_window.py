@@ -296,6 +296,33 @@ class StandardsChatWindow(Window):
         # Fall back to Windows USERNAME environment variable
         username = os.environ.get('USERNAME', '')
         if username:
+            try:
+                # Try to get display name from Windows ctypes
+                import ctypes
+                GetUserNameEx = ctypes.windll.secur32.GetUserNameExW
+                NameDisplay = 3
+                
+                size = ctypes.pointer(ctypes.c_ulong(0))
+                GetUserNameEx(NameDisplay, None, size)
+                
+                name_buffer = ctypes.create_unicode_buffer(size.contents.value)
+                GetUserNameEx(NameDisplay, name_buffer, size)
+                
+                full_name = name_buffer.value
+                if full_name:
+                    # Usually "Last, First" or "First Last" - check for comma
+                    if ',' in full_name:
+                        parts = full_name.split(',')
+                        # Assume "Last, First" -> Return "First"
+                        if len(parts) >= 2:
+                            return parts[1].strip()
+                    
+                    # Or simple space split
+                    parts = full_name.split(' ')
+                    return parts[0]
+            except:
+                pass
+            
             return username.capitalize()
 
         return ''
@@ -389,7 +416,7 @@ class StandardsChatWindow(Window):
         avatar_border.Width = 24
         avatar_border.Height = 24
         avatar_border.CornerRadius = System.Windows.CornerRadius(12)
-        avatar_border.Background = SolidColorBrush(Color.FromRgb(0xE8, 0xF4, 0xFD))
+        avatar_border.Background = SolidColorBrush(Color.FromRgb(215, 235, 255)) # slightly stronger blue
         avatar_border.VerticalAlignment = System.Windows.VerticalAlignment.Top
         avatar_border.Margin = Thickness(0, 5, 8, 0)
 
@@ -1455,7 +1482,7 @@ class StandardsChatWindow(Window):
         # Set style based on user/assistant
         if is_user:
             border.Style = self.FindResource("MessageBubbleUser")
-            text_color = self.FindResource("TextPrimaryColor")
+            text_color = Brushes.White
         else:
             border.Style = self.FindResource("MessageBubbleAssistant")
             text_color = self.FindResource("TextPrimaryColor")
