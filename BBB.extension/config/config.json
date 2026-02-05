@@ -1,8 +1,13 @@
 {
   "ui": {
-    "window_height": 700, 
-    "theme": "light", 
-    "window_width": 500
+    "window_height": 700,
+    "theme": "light",
+    "window_width": 750,
+    "suggested_prompts": [
+      "What are the naming conventions for views?",
+      "How should I set up worksets?",
+      "What are the standard line weights?"
+    ]
   }, 
   "user": {
     "name": "", 

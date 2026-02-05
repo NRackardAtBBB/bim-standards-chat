@@ -1,7 +1,7 @@
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Kodama" 
-        Height="750" Width="500"
+        Title="Kodama"
+        Height="750" Width="750"
         MinHeight="500" MinWidth="400"
         WindowStartupLocation="CenterScreen"
         Background="#F3F3F3"
@@ -16,7 +16,7 @@
         <SolidColorBrush x:Key="BorderColor" Color="#E0E0E0"/>
         <SolidColorBrush x:Key="TextPrimaryColor" Color="#323130"/>
         <SolidColorBrush x:Key="TextSecondaryColor" Color="#605E5C"/>
-        <SolidColorBrush x:Key="UserBubbleColor" Color="#0078D4"/>
+        <SolidColorBrush x:Key="UserBubbleColor" Color="#E1DFDD"/>
         <SolidColorBrush x:Key="AssistantBubbleColor" Color="#FFFFFF"/>
 
         <!-- Base Styles -->
@@ -30,7 +30,7 @@
             <Setter Property="Background" Value="{StaticResource UserBubbleColor}"/>
             <Setter Property="CornerRadius" Value="12,12,0,12"/>
             <Setter Property="Padding" Value="12"/>
-            <Setter Property="Margin" Value="50,5,10,5"/>
+            <Setter Property="Margin" Value="50,5,4,5"/>
             <Setter Property="HorizontalAlignment" Value="Right"/>
             <Setter Property="Effect">
                 <Setter.Value>
@@ -43,7 +43,7 @@
             <Setter Property="Background" Value="{StaticResource AssistantBubbleColor}"/>
             <Setter Property="CornerRadius" Value="12,12,12,0"/>
             <Setter Property="Padding" Value="12"/>
-            <Setter Property="Margin" Value="10,5,50,5"/>
+            <Setter Property="Margin" Value="4,5,50,5"/>
             <Setter Property="HorizontalAlignment" Value="Left"/>
             <Setter Property="BorderBrush" Value="{StaticResource BorderColor}"/>
             <Setter Property="BorderThickness" Value="0"/>
@@ -214,9 +214,13 @@
                         Cursor="Hand"
                         ToolTip="Open BBB Revit Standards Site">
                     <Button.Content>
-                        <Image x:Name="HeaderIcon" 
-                               Width="28" 
-                               Height="28"/>
+                        <Border Background="#E8F4FD" CornerRadius="14" Width="28" Height="28">
+                            <Image x:Name="HeaderIcon"
+                                   Width="20"
+                                   Height="20"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"/>
+                        </Border>
                     </Button.Content>
                 </Button>
                 
@@ -228,8 +232,8 @@
                               Foreground="{StaticResource TextPrimaryColor}"/>
                     <StackPanel Orientation="Horizontal">
                         <Ellipse Width="6" Height="6" Fill="#107C10" Margin="0,1,6,0" VerticalAlignment="Center"/>
-                        <TextBlock x:Name="StatusText" 
-                                  Text="Ready" 
+                        <TextBlock x:Name="StatusText"
+                                  Text="Active"
                                   FontSize="11" 
                                   Foreground="{StaticResource TextSecondaryColor}"/>
                     </StackPanel>
@@ -282,17 +286,7 @@
                      VerticalScrollBarVisibility="Auto"
                      Padding="10,15">
             <StackPanel x:Name="MessagesPanel">
-                <!-- Welcome message -->
-                <Border Style="{StaticResource MessageBubbleAssistant}">
-                    <StackPanel>
-                        <TextBlock TextWrapping="Wrap" Foreground="{StaticResource TextPrimaryColor}" LineHeight="20">
-                            <Run Text="Hi! I'm here to help you with BBB's Revit standards." FontWeight="SemiBold"/>
-                            <LineBreak/>
-                            <LineBreak/>
-                            <Run Text="Ask me anything about BBB's Revit standards and I'll point you to the right information."/>
-                        </TextBlock>
-                    </StackPanel>
-                </Border>
+                <!-- Welcome message generated dynamically in Python -->
             </StackPanel>
         </ScrollViewer>
         
@@ -368,14 +362,15 @@
                             VerticalContentAlignment="Center"/>
                 </Border>
                 
-                <Button x:Name="SendButton" 
+                <Button x:Name="SendButton"
                        Grid.Column="2"
                        Style="{StaticResource ModernButtonStyle}"
                        Content="Send"
                        Width="70"
                        Height="36"
                        Margin="10,0,0,0"
-                       VerticalAlignment="Bottom"/>
+                       VerticalAlignment="Bottom"
+                       IsEnabled="False"/>
             </Grid>
         </Border>
         

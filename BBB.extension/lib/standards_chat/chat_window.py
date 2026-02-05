@@ -92,7 +92,27 @@ class StandardsChatWindow(Window):
         
         # Load icon image
         self._load_header_icon()
-        
+
+        # Cache bot icon bitmap for avatars
+        self._bot_icon_bitmap = None
+        try:
+            script_dir_init = os.path.dirname(__file__)
+            lib_dir_init = os.path.dirname(script_dir_init)
+            extension_dir_init = os.path.dirname(lib_dir_init)
+            bot_icon_path = os.path.join(
+                extension_dir_init, 'Chat.tab', 'Kodama.panel',
+                'Kodama.pushbutton', 'icon.png'
+            )
+            if os.path.exists(bot_icon_path):
+                bmp = BitmapImage()
+                bmp.BeginInit()
+                bmp.UriSource = Uri("file:///" + bot_icon_path.replace("\\", "/"))
+                bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad
+                bmp.EndInit()
+                self._bot_icon_bitmap = bmp
+        except:
+            pass
+
         # Animation
         self.spin_animation = None
         
@@ -173,6 +193,7 @@ class StandardsChatWindow(Window):
         # Wire up events
         self.send_button.Click += self.on_send_click
         self.input_textbox.KeyDown += self.on_input_keydown
+        self.input_textbox.TextChanged += self.on_input_text_changed
         self.toggle_sidebar_button.Click += self.on_toggle_sidebar_click
         self.new_chat_button.Click += self.on_new_chat_click
         self.history_listbox.SelectionChanged += self.on_history_selection_changed
@@ -225,6 +246,255 @@ class StandardsChatWindow(Window):
             # Print error for debugging
             print("Could not load header icon: {}".format(str(e)))
     
+    def _get_user_display_name(self):
+        """Get user's display name for personalization"""
+        # Try config first
+        try:
+            config_name = self.config.get('user', 'name', '')
+            if config_name:
+                return config_name
+        except:
+            pass
+
+        # Fall back to Windows USERNAME environment variable
+        username = os.environ.get('USERNAME', '')
+        if username:
+            return username.capitalize()
+
+        return ''
+
+    def _add_welcome_message(self):
+        """Add a dynamic welcome message with suggested prompts"""
+        import random
+        from System.Windows.Markup import XamlReader
+
+        name = self._get_user_display_name()
+        name_part = " " + name if name else ""
+
+        greetings = [
+            "Hey{}, what can I help you with today?",
+            "Hi{}, got a Revit question?",
+            "Hello{}! Ask me anything about BBB's Revit standards.",
+            "Hey{}! What are you working on today?",
+            "Hi{}, ready to help with your Revit standards questions.",
+        ]
+
+        greeting = random.choice(greetings).format(name_part)
+
+        # Build the welcome bubble
+        border = Border()
+        border.Style = self.FindResource("MessageBubbleAssistant")
+        border.Name = "WelcomeMessage"
+
+        stack = StackPanel()
+
+        tb = TextBlock()
+        tb.TextWrapping = TextWrapping.Wrap
+        tb.Foreground = self.FindResource("TextPrimaryColor")
+        tb.LineHeight = 20
+
+        greeting_run = Run(greeting)
+        greeting_run.FontWeight = System.Windows.FontWeights.SemiBold
+        tb.Inlines.Add(greeting_run)
+
+        stack.Children.Add(tb)
+
+        # Add suggested prompt chips
+        try:
+            prompts = self.config.get('ui', 'suggested_prompts', [])
+            if not prompts:
+                prompts = [
+                    "What are the naming conventions for views?",
+                    "How should I set up worksets?",
+                    "What are the standard line weights?"
+                ]
+        except:
+            prompts = [
+                "What are the naming conventions for views?",
+                "How should I set up worksets?",
+                "What are the standard line weights?"
+            ]
+
+        if prompts:
+            from System.Windows.Controls import WrapPanel
+            prompts_panel = WrapPanel()
+            prompts_panel.Margin = Thickness(0, 12, 0, 0)
+
+            for prompt_text in prompts:
+                try:
+                    safe_text = prompt_text.replace('"', '&quot;').replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+                    chip_xaml = '<Button xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" Content="{}" Padding="10,6" Margin="0,4,8,4" FontSize="11" FontFamily="Segoe UI" Cursor="Hand" Background="#F0F0F0" Foreground="#323130" BorderBrush="#E0E0E0" BorderThickness="1"><Button.Template><ControlTemplate TargetType="Button"><Border Background="{{TemplateBinding Background}}" BorderBrush="{{TemplateBinding BorderBrush}}" BorderThickness="{{TemplateBinding BorderThickness}}" CornerRadius="12" Padding="{{TemplateBinding Padding}}"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="#E1DFDD"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Button.Template></Button>'.format(safe_text)
+                    chip = XamlReader.Parse(chip_xaml)
+                    chip.Tag = prompt_text
+                    chip.Click += self._on_suggested_prompt_click
+                    prompts_panel.Children.Add(chip)
+                except Exception as e:
+                    print("Error creating prompt chip: {}".format(str(e)))
+
+            stack.Children.Add(prompts_panel)
+
+        border.Child = stack
+
+        # Wrap with bot avatar
+        container = self._wrap_with_avatar(border, is_user=False)
+        self.messages_panel.Children.Insert(0, container)
+
+    def _on_suggested_prompt_click(self, sender, args):
+        """Handle suggested prompt chip click"""
+        prompt_text = sender.Tag
+        if prompt_text:
+            self.input_textbox.Text = prompt_text
+            self.send_message()
+
+    def _create_bot_avatar(self):
+        """Create a small Kodama bot avatar element"""
+        avatar_border = Border()
+        avatar_border.Width = 24
+        avatar_border.Height = 24
+        avatar_border.CornerRadius = System.Windows.CornerRadius(12)
+        avatar_border.Background = SolidColorBrush(Color.FromRgb(0xE8, 0xF4, 0xFD))
+        avatar_border.VerticalAlignment = System.Windows.VerticalAlignment.Top
+        avatar_border.Margin = Thickness(0, 5, 8, 0)
+
+        if self._bot_icon_bitmap:
+            img = Image()
+            img.Source = self._bot_icon_bitmap
+            img.Width = 16
+            img.Height = 16
+            img.HorizontalAlignment = HorizontalAlignment.Center
+            img.VerticalAlignment = System.Windows.VerticalAlignment.Center
+            avatar_border.Child = img
+
+        return avatar_border
+
+    def _create_user_avatar(self):
+        """Create a user initials avatar element"""
+        avatar_border = Border()
+        avatar_border.Width = 24
+        avatar_border.Height = 24
+        avatar_border.CornerRadius = System.Windows.CornerRadius(12)
+        avatar_border.Background = SolidColorBrush(Color.FromRgb(0x00, 0x78, 0xD4))
+        avatar_border.VerticalAlignment = System.Windows.VerticalAlignment.Top
+        avatar_border.Margin = Thickness(8, 5, 0, 0)
+
+        name = self._get_user_display_name()
+        initial = name[0].upper() if name else "U"
+
+        initials_text = TextBlock()
+        initials_text.Text = initial
+        initials_text.FontSize = 11
+        initials_text.FontWeight = System.Windows.FontWeights.SemiBold
+        initials_text.Foreground = Brushes.White
+        initials_text.HorizontalAlignment = HorizontalAlignment.Center
+        initials_text.VerticalAlignment = System.Windows.VerticalAlignment.Center
+
+        avatar_border.Child = initials_text
+        return avatar_border
+
+    def _wrap_with_avatar(self, bubble, is_user):
+        """Wrap a message bubble in a Grid with an avatar"""
+        from System.Windows.Controls import Grid, ColumnDefinition
+        from System.Windows import GridLength, GridUnitType
+
+        container = Grid()
+        container.Margin = Thickness(0, 2, 0, 2)
+
+        if is_user:
+            # User: [flex space] [bubble] [avatar]
+            col1 = ColumnDefinition()
+            col1.Width = GridLength(1, GridUnitType.Star)
+            col2 = ColumnDefinition()
+            col2.Width = GridLength.Auto
+            col3 = ColumnDefinition()
+            col3.Width = GridLength.Auto
+            container.ColumnDefinitions.Add(col1)
+            container.ColumnDefinitions.Add(col2)
+            container.ColumnDefinitions.Add(col3)
+
+            avatar = self._create_user_avatar()
+            Grid.SetColumn(bubble, 1)
+            Grid.SetColumn(avatar, 2)
+            container.Children.Add(bubble)
+            container.Children.Add(avatar)
+        else:
+            # Assistant: [avatar] [bubble] [flex space]
+            col1 = ColumnDefinition()
+            col1.Width = GridLength.Auto
+            col2 = ColumnDefinition()
+            col2.Width = GridLength.Auto
+            col3 = ColumnDefinition()
+            col3.Width = GridLength(1, GridUnitType.Star)
+            container.ColumnDefinitions.Add(col1)
+            container.ColumnDefinitions.Add(col2)
+            container.ColumnDefinitions.Add(col3)
+
+            avatar = self._create_bot_avatar()
+            Grid.SetColumn(avatar, 0)
+            Grid.SetColumn(bubble, 1)
+            container.Children.Add(avatar)
+            container.Children.Add(bubble)
+
+        return container
+
+    def _add_sources_to_textblock(self, textblock, sources):
+        """Add subdued source links to a textblock"""
+        if not sources:
+            return
+
+        # Simple spacing (no divider, no header)
+        textblock.Inlines.Add(Run("\n\n"))
+
+        grey_brush = SolidColorBrush(Color.FromRgb(0x60, 0x5E, 0x5C))
+
+        # Try to load SharePoint icon
+        sp_icon_bitmap = None
+        try:
+            script_dir = os.path.dirname(__file__)
+            lib_dir = os.path.dirname(script_dir)
+            sp_icon_path = os.path.join(lib_dir, 'ui', 'sharepoint_icon.png')
+            if os.path.exists(sp_icon_path):
+                sp_icon_bitmap = BitmapImage()
+                sp_icon_bitmap.BeginInit()
+                sp_icon_bitmap.UriSource = Uri("file:///" + sp_icon_path.replace("\\", "/"))
+                sp_icon_bitmap.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad
+                sp_icon_bitmap.EndInit()
+        except:
+            pass
+
+        for source in sources:
+            textblock.Inlines.Add(Run("\n"))
+
+            # Create hyperlink in grey, smaller font
+            hyperlink = Hyperlink()
+            link_run = Run(source['title'])
+            link_run.FontSize = 10
+            hyperlink.Inlines.Add(link_run)
+            hyperlink.NavigateUri = System.Uri(source['url'])
+            hyperlink.RequestNavigate += self.on_hyperlink_click
+            hyperlink.Foreground = grey_brush
+            hyperlink.TextDecorations = None
+
+            textblock.Inlines.Add(hyperlink)
+
+            # Add SharePoint icon or fallback
+            if sp_icon_bitmap:
+                img = Image()
+                img.Source = sp_icon_bitmap
+                img.Width = 12
+                img.Height = 12
+                img.Margin = Thickness(4, 0, 0, 0)
+                from System.Windows.Documents import InlineUIContainer
+                container = InlineUIContainer(img)
+                container.BaselineAlignment = System.Windows.BaselineAlignment.Center
+                textblock.Inlines.Add(container)
+
+            # Add category if available
+            if source.get('category'):
+                category_text = Run("  {}".format(source['category']))
+                category_text.FontSize = 9
+                category_text.Foreground = grey_brush
+                textblock.Inlines.Add(category_text)
+
     def on_send_click(self, sender, args):
         """Handle send button click"""
         self.send_message()
@@ -244,9 +514,23 @@ class StandardsChatWindow(Window):
                     self.send_message()
                 args.Handled = True
     
+    def on_input_text_changed(self, sender, args):
+        """Enable/disable send button based on input text"""
+        has_text = len(self.input_textbox.Text.strip()) > 0
+        self.send_button.IsEnabled = has_text
+
     def on_window_loaded(self, sender, args):
-        """Handle window loaded event - populate history list"""
+        """Handle window loaded event - populate history list and welcome"""
         self.refresh_history_list()
+
+        # Add dynamic welcome message
+        self._add_welcome_message()
+
+        # Auto-open sidebar if user has more than 3 chat sessions
+        from System.Windows import GridLength, GridUnitType
+        sessions = self.history_manager.list_sessions()
+        if len(sessions) > 3:
+            self.sidebar_column.Width = GridLength(250, GridUnitType.Pixel)
     
     def on_toggle_sidebar_click(self, sender, args):
         """Toggle sidebar visibility"""
@@ -285,27 +569,27 @@ class StandardsChatWindow(Window):
     def on_new_chat_click(self, sender, args):
         """Start a new chat session"""
         from System.Windows import GridLength, GridUnitType
-        
+
         # Collapse sidebar
         self.sidebar_column.Width = GridLength(0, GridUnitType.Pixel)
-        
+
         # If current conversation has content, save it first
         if self.conversation:
             self.save_current_session()
-        
+
         # Clear current conversation
         self.conversation = []
         self.current_session_id = None
         self.session_title = None
-        
-        # Clear messages panel except welcome message
-        while self.messages_panel.Children.Count > 1:
-            self.messages_panel.Children.RemoveAt(1)
-        
+
+        # Clear all messages and add fresh welcome with new random greeting
+        self.messages_panel.Children.Clear()
+        self._add_welcome_message()
+
         # Clear input
         self.input_textbox.Clear()
         self.input_textbox.Focus()
-        
+
         # Refresh history list
         self.refresh_history_list()
     
@@ -374,30 +658,12 @@ class StandardsChatWindow(Window):
             title_txt = TextBlock()
             title_txt.Text = session['title']
             title_txt.FontSize = 12
-            title_txt.TextTrimming = TextTrimming.CharacterEllipsis
+            title_txt.TextWrapping = TextWrapping.Wrap
+            title_txt.MaxHeight = 36
             title_txt.Foreground = self.FindResource("TextPrimaryColor")
             title_txt.ToolTip = session['title']
-            
-            time_txt = TextBlock()
-            # Format timestamp
-            try:
-                from datetime import datetime
-                # Try parsing ISO format manually since fromisoformat is 3.7+
-                # Format: YYYY-MM-DDTHH:MM:SS.mmmmmm
-                ts = session['timestamp']
-                if '.' in ts:
-                    dt = datetime.strptime(ts, "%Y-%m-%dT%H:%M:%S.%f")
-                else:
-                    dt = datetime.strptime(ts, "%Y-%m-%dT%H:%M:%S")
-                time_txt.Text = dt.strftime('%b %d, %I:%M %p')
-            except:
-                time_txt.Text = session['timestamp']
-            time_txt.FontSize = 10
-            time_txt.Foreground = self.FindResource("TextSecondaryColor")
-            time_txt.Margin = Thickness(0, 2, 0, 0)
-            
+
             stack.Children.Add(title_txt)
-            stack.Children.Add(time_txt)
             
             # Delete Button
             del_btn = Button()
@@ -447,34 +713,52 @@ class StandardsChatWindow(Window):
     def load_chat_session(self, session_id):
         """Load a chat session from disk"""
         session_data = self.history_manager.load_session(session_id)
-        
+
         if not session_data:
             return
-        
+
         # Set current session
         self.current_session_id = session_id
         self.session_title = session_data.get('title', 'Untitled Chat')
         self.conversation = session_data.get('conversation', [])
-        
-        # Clear messages panel except welcome message
-        while self.messages_panel.Children.Count > 1:
-            self.messages_panel.Children.RemoveAt(1)
-        
+
+        # Clear all messages and re-add welcome
+        self.messages_panel.Children.Clear()
+        self._add_welcome_message()
+
+        # Show session date as subtle centered text
+        timestamp = session_data.get('timestamp', '')
+        if timestamp:
+            try:
+                from datetime import datetime
+                if '.' in timestamp:
+                    dt = datetime.strptime(timestamp, "%Y-%m-%dT%H:%M:%S.%f")
+                else:
+                    dt = datetime.strptime(timestamp, "%Y-%m-%dT%H:%M:%S")
+                date_str = dt.strftime('%B %d, %Y')
+            except:
+                date_str = timestamp
+
+            date_label = TextBlock()
+            date_label.Text = date_str
+            date_label.FontSize = 10
+            date_label.Foreground = self.FindResource("TextSecondaryColor")
+            date_label.HorizontalAlignment = HorizontalAlignment.Center
+            date_label.Margin = Thickness(0, 5, 0, 10)
+            self.messages_panel.Children.Add(date_label)
+
         # Re-render all messages
         for exchange in self.conversation:
-            # Add user message
             self.add_message(exchange['user'], is_user=True)
-            
-            # Add assistant response
             self.add_message(
                 exchange['assistant'],
                 is_user=False,
                 sources=exchange.get('sources')
             )
-        
+
         # Scroll to bottom
         self.message_scrollviewer.ScrollToBottom()
-        
+
         # Focus input
         self.input_textbox.Focus()
     
@@ -707,21 +991,16 @@ class StandardsChatWindow(Window):
         thread.Start()
     
     def add_typing_indicator(self):
-        """Add animated typing indicator bubble with status text"""
+        """Add animated typing indicator bubble with status text on same line"""
         # Create border (message bubble)
         border = Border()
         border.Style = self.FindResource("MessageBubbleAssistant")
-        border.Name = "TypingIndicator"
-        
-        # Create vertical stack for dots and status
-        main_stack = StackPanel()
-        main_stack.Orientation = Orientation.Vertical
-        
-        # Create container for dots
+
+        # Single horizontal stack for dots + status text on same line
         dots_stack = StackPanel()
         dots_stack.Orientation = Orientation.Horizontal
         dots_stack.HorizontalAlignment = HorizontalAlignment.Left
-        
+
         # Create three animated dots
         for i in range(3):
             dot = Ellipse()
@@ -729,7 +1008,8 @@ class StandardsChatWindow(Window):
             dot.Height = 8
             dot.Fill = self.FindResource("TextSecondaryColor")
             dot.Margin = Thickness(0 if i == 0 else 4, 0, 0, 0)
-            
+            dot.VerticalAlignment = System.Windows.VerticalAlignment.Center
+
             # Animate opacity
             animation = DoubleAnimation()
             animation.From = 0.3
@@ -738,22 +1018,23 @@ class StandardsChatWindow(Window):
             animation.AutoReverse = True
             animation.RepeatBehavior = RepeatBehavior.Forever
             animation.BeginTime = TimeSpan.FromSeconds(i * 0.2)
-            
+
             dot.BeginAnimation(
                 Ellipse.OpacityProperty,
                 animation
             )
-            
+
             dots_stack.Children.Add(dot)
-        
-        # Create status text with pulsing animation
+
+        # Status text on same line as dots
         status_text = TextBlock()
         status_text.Text = "Searching BBB's Revit standards..."
         status_text.FontSize = 11
         status_text.Foreground = self.FindResource("TextSecondaryColor")
-        status_text.Margin = Thickness(0, 8, 0, 0)
+        status_text.Margin = Thickness(8, 0, 0, 0)
+        status_text.VerticalAlignment = System.Windows.VerticalAlignment.Center
         status_text.Name = "TypingStatusText"
-        
+
         # Animate status text opacity (subtle pulse)
         status_animation = DoubleAnimation()
         status_animation.From = 0.5
@@ -761,33 +1042,31 @@ class StandardsChatWindow(Window):
         status_animation.Duration = Duration(TimeSpan.FromSeconds(1.5))
         status_animation.AutoReverse = True
         status_animation.RepeatBehavior = RepeatBehavior.Forever
-        
+
         status_text.BeginAnimation(
             TextBlock.OpacityProperty,
             status_animation
         )
-        
-        # Add to stacks
-        main_stack.Children.Add(dots_stack)
-        main_stack.Children.Add(status_text)
-        
-        border.Child = main_stack
-        self.messages_panel.Children.Add(border)
-        
+
+        dots_stack.Children.Add(status_text)
+
+        border.Child = dots_stack
+
+        # Wrap with bot avatar and set Name on container for removal
+        container = self._wrap_with_avatar(border, is_user=False)
+        container.Name = "TypingIndicator"
+        self.messages_panel.Children.Add(container)
+
         # Store reference for updates
         self.typing_status_text = status_text
-        
+
         # Scroll to bottom
         self.message_scrollviewer.ScrollToBottom()
     
     def replace_typing_with_response(self, text, sources):
         """Remove typing indicator and add actual response"""
-        # Find and remove typing indicator
-        for child in self.messages_panel.Children:
-            if hasattr(child, 'Name') and child.Name == "TypingIndicator":
-                self.messages_panel.Children.Remove(child)
-                break
-        
+        self._find_and_remove_typing_indicator()
+
         # Add the actual response
         self.add_message(text, is_user=False, sources=sources)
     
@@ -798,33 +1077,40 @@ class StandardsChatWindow(Window):
                 lambda: setattr(self.typing_status_text, 'Text', status)
             )
     
-    def start_streaming_response(self):
-        """Remove typing indicator and create empty message bubble for streaming"""
-        # Find and remove typing indicator
+    def _find_and_remove_typing_indicator(self):
+        """Find and remove the typing indicator from messages panel"""
         for child in self.messages_panel.Children:
             if hasattr(child, 'Name') and child.Name == "TypingIndicator":
                 self.messages_panel.Children.Remove(child)
-                break
-        
+                return True
+        return False
+
+    def start_streaming_response(self):
+        """Remove typing indicator and create empty message bubble for streaming"""
+        self._find_and_remove_typing_indicator()
+
         # Create border (message bubble)
         border = Border()
         border.Style = self.FindResource("MessageBubbleAssistant")
         border.Name = "StreamingMessage"
-        
+
         # Create text content
         textblock = TextBlock()
         textblock.TextWrapping = TextWrapping.Wrap
         textblock.Foreground = self.FindResource("TextPrimaryColor")
         textblock.Name = "StreamingTextBlock"
-        
+
         border.Child = textblock
-        self.messages_panel.Children.Add(border)
-        
+
+        # Wrap with bot avatar
+        container = self._wrap_with_avatar(border, is_user=False)
+        self.messages_panel.Children.Add(container)
+
         # Store references
         self.streaming_textblock = textblock
         self.streaming_border = border
         self.streaming_text = ""
-        
+
         # Scroll to bottom
         self.message_scrollviewer.ScrollToBottom()
     
@@ -872,49 +1158,8 @@ class StandardsChatWindow(Window):
                 if actions:
                     self._add_action_buttons(self.streaming_border, actions)
             
-            # Add sources with special formatting
-            if sources:
-                # Add divider line
-                self.streaming_textblock.Inlines.Add(Run("\n\n"))
-                divider = Run("─" * 40)
-                divider.Foreground = self.FindResource("BorderColor")
-                self.streaming_textblock.Inlines.Add(divider)
-                
-                # Add "Sources" header
-                self.streaming_textblock.Inlines.Add(Run("\n\n"))
-                header = Run("📚 Reference Documents")
-                header.FontWeight = System.Windows.FontWeights.Bold
-                header.FontSize = 13
-                header.Foreground = self.FindResource("PrimaryColor")
-                self.streaming_textblock.Inlines.Add(header)
-                self.streaming_textblock.Inlines.Add(Run("\n"))
-                
-                # Add each source with icon and styling
-                for source in sources:
-                    self.streaming_textblock.Inlines.Add(Run("\n"))
-                    
-                    # Bullet/icon
-                    bullet = Run("→ ")
-                    bullet.Foreground = self.FindResource("PrimaryColor")
-                    bullet.FontWeight = System.Windows.FontWeights.Bold
-                    self.streaming_textblock.Inlines.Add(bullet)
-                    
-                    # Create hyperlink
-                    hyperlink = Hyperlink()
-                    hyperlink.Inlines.Add(Run(source['title']))
-                    hyperlink.NavigateUri = System.Uri(source['url'])
-                    hyperlink.RequestNavigate += self.on_hyperlink_click
-                    hyperlink.Foreground = self.FindResource("PrimaryColor")
-                    hyperlink.TextDecorations = None  # Remove underline until hover
-                    
-                    self.streaming_textblock.Inlines.Add(hyperlink)
-                    
-                    # Add category if available
-                    if source.get('category'):
-                        category_text = Run(" [{}]".format(source['category']))
-                        category_text.FontSize = 10
-                        category_text.Foreground = self.FindResource("TextSecondaryColor")
-                        self.streaming_textblock.Inlines.Add(category_text)
+            # Add subdued source links
+            self._add_sources_to_textblock(self.streaming_textblock, sources)
             
             # Scroll to bottom
             self.message_scrollviewer.ScrollToBottom()
@@ -1044,83 +1289,45 @@ class StandardsChatWindow(Window):
     
     def enable_input(self):
         """Re-enable input controls"""
-        self.send_button.IsEnabled = True
         self.input_textbox.IsEnabled = True
+        # Only enable send button if there's text in the input
+        self.send_button.IsEnabled = len(self.input_textbox.Text.strip()) > 0
         self.input_textbox.Focus()
     
     def add_message(self, text, is_user=False, sources=None):
-        """Add a message bubble to the chat"""
+        """Add a message bubble with avatar to the chat"""
         # Create border (message bubble)
         border = Border()
-        
+
         # Set style based on user/assistant
         if is_user:
             border.Style = self.FindResource("MessageBubbleUser")
-            text_color = Brushes.White
+            text_color = self.FindResource("TextPrimaryColor")
         else:
             border.Style = self.FindResource("MessageBubbleAssistant")
             text_color = self.FindResource("TextPrimaryColor")
-        
+
         # Create text content with basic markdown formatting
         textblock = TextBlock()
         textblock.TextWrapping = TextWrapping.Wrap
         textblock.Foreground = text_color
-        
+
         # Basic markdown parsing for assistant messages
         if not is_user:
             self._add_formatted_text(textblock, text)
         else:
             textblock.Inlines.Add(Run(text))
-        
-        # Add sources if present
+
+        # Add subdued source links
         if sources and not is_user:
-            # Add divider line
-            textblock.Inlines.Add(Run("\n\n"))
-            divider = Run("─" * 40)
-            divider.Foreground = self.FindResource("BorderColor")
-            textblock.Inlines.Add(divider)
-            
-            # Add "Sources" header
-            textblock.Inlines.Add(Run("\n\n"))
-            header = Run("📚 Reference Documents")
-            header.FontWeight = System.Windows.FontWeights.Bold
-            header.FontSize = 13
-            header.Foreground = self.FindResource("PrimaryColor")
-            textblock.Inlines.Add(header)
-            textblock.Inlines.Add(Run("\n"))
-            
-            # Add each source with icon and styling
-            for source in sources:
-                textblock.Inlines.Add(Run("\n"))
-                
-                # Bullet/icon
-                bullet = Run("→ ")
-                bullet.Foreground = self.FindResource("PrimaryColor")
-                bullet.FontWeight = System.Windows.FontWeights.Bold
-                textblock.Inlines.Add(bullet)
-                
-                # Create hyperlink
-                hyperlink = Hyperlink()
-                hyperlink.Inlines.Add(Run(source['title']))
-                hyperlink.NavigateUri = System.Uri(source['url'])
-                hyperlink.RequestNavigate += self.on_hyperlink_click
-                hyperlink.Foreground = self.FindResource("PrimaryColor")
-                hyperlink.TextDecorations = None  # Remove underline until hover
-                
-                textblock.Inlines.Add(hyperlink)
-                
-                # Add category if available
-                if source.get('category'):
-                    category_text = Run(" [{}]".format(source['category']))
-                    category_text.FontSize = 10
-                    category_text.Foreground = self.FindResource("TextSecondaryColor")
-                    textblock.Inlines.Add(category_text)
-        
+            self._add_sources_to_textblock(textblock, sources)
+
         border.Child = textblock
-        
-        # Add to panel
-        self.messages_panel.Children.Add(border)
-        
+
+        # Wrap with avatar and add to panel
+        container = self._wrap_with_avatar(border, is_user)
+        self.messages_panel.Children.Add(container)
+
         # Scroll to bottom
         self.message_scrollviewer.ScrollToBottom()
     
