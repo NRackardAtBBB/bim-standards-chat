@@ -296,33 +296,7 @@ class StandardsChatWindow(Window):
         # Fall back to Windows USERNAME environment variable
         username = os.environ.get('USERNAME', '')
         if username:
-            try:
-                # Try to get display name from Windows ctypes
-                import ctypes
-                GetUserNameEx = ctypes.windll.secur32.GetUserNameExW
-                NameDisplay = 3
-                
-                size = ctypes.pointer(ctypes.c_ulong(0))
-                GetUserNameEx(NameDisplay, None, size)
-                
-                name_buffer = ctypes.create_unicode_buffer(size.contents.value)
-                GetUserNameEx(NameDisplay, name_buffer, size)
-                
-                full_name = name_buffer.value
-                if full_name:
-                    # Usually "Last, First" or "First Last" - check for comma
-                    if ',' in full_name:
-                        parts = full_name.split(',')
-                        # Assume "Last, First" -> Return "First"
-                        if len(parts) >= 2:
-                            return parts[1].strip()
-                    
-                    # Or simple space split
-                    parts = full_name.split(' ')
-                    return parts[0]
-            except:
-                pass
-            
+            # Reverted ctypes username retrieval due to instability in IronPython
             return username.capitalize()
 
         return ''
