@@ -12,6 +12,7 @@ import System
 from System.Net.Http import HttpClient, HttpRequestMessage, HttpMethod
 from System.Net.Http.Headers import MediaTypeWithQualityHeaderValue
 from System.Text import Encoding
+from standards_chat.utils import safe_print, safe_str
 
 
 class AnthropicClient:
@@ -118,7 +119,7 @@ class AnthropicClient:
                 return None
                 
         except Exception as e:
-            print("Error generating title: {}".format(str(e)))
+            safe_print("Error generating title: {}".format(safe_str(e)))
             return None
 
     def get_search_keywords(self, user_query, index_data=None):
@@ -196,12 +197,12 @@ Return ONLY the keywords separated by spaces. Do not include any other text.""".
                     'output_tokens': output_tokens
                 }
             else:
-                print("Keyword extraction failed: " + response_text)
-                return {'keywords': user_input, 'input_tokens': 0, 'output_tokens': 0}
+                safe_print("Keyword extraction failed: " + response_text)
+                return {'keywords': user_query, 'input_tokens': 0, 'output_tokens': 0}
                 
         except Exception as e:
-            print("Error extracting keywords: {}".format(str(e)))
-            return {'keywords': user_input, 'input_tokens': 0, 'output_tokens': 0}
+            safe_print("Error extracting keywords: {}".format(safe_str(e)))
+            return {'keywords': user_query, 'input_tokens': 0, 'output_tokens': 0}
     
     def get_response_stream(self, user_query, notion_pages, revit_context=None, 
                            conversation_history=None, callback=None, screenshot_base64=None):
@@ -520,7 +521,7 @@ If the standards don't fully address the question, acknowledge this and provide 
         stream = response.Content.ReadAsStreamAsync().Result
         reader = System.IO.StreamReader(stream, Encoding.UTF8)
         
-        full_text = ""
+        full_text = u""
         input_tokens = 0
         output_tokens = 0
 
@@ -545,10 +546,20 @@ If the standards don't fully address the question, acknowledge this and provide 
                     delta = event_data.get('delta', {})
                     if delta.get('type') == 'text_delta':
                         text_chunk = delta.get('text', '')
+                        safe_print(u"DEBUG: Received text_chunk from API, type: {}".format(type(text_chunk).__name__))
+                        
+                        # Ensure text_chunk is unicode
+                        if not isinstance(text_chunk, unicode):
+                            if isinstance(text_chunk, str):
+                                text_chunk = text_chunk.decode('utf-8')
+                            else:
+                                text_chunk = unicode(text_chunk)
+                        
                         full_text += text_chunk
 
                         # Call callback with chunk
                         if callback:
+                            safe_print(u"DEBUG: Calling callback with chunk")
                             callback(text_chunk)
 
                 # Capture usage if the API includes it in a final metadata/event payload
@@ -566,7 +577,7 @@ If the standards don't fully address the question, acknowledge this and provide 
                         output_tokens = int(usage.get('output_tokens', 0) or 0)
 
             except Exception as e:
-                print("Error parsing stream chunk: {}".format(str(e)))
+                safe_print("Error parsing stream chunk: {}".format(safe_str(e)))
                 continue
         
         reader.Close()

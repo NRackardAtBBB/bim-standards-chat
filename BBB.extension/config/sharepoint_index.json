@@ -1,227 +1,284 @@
 [
   {
-    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/1.1---Poisonous-Families-VS-Heroic-Families.aspx", 
-    "title": "1.1 - Poisonous Families VS Heroic Families", 
-    "description": "Transcript Let's talk about the differences between a poisonous family and a heroic family. Let's start with the poisonous. Poisonous family will slow you down. It creates confusion in the team. It looks weird or ugly. It makes the model larger and \u2026"
-  }, 
+    "id": "ae17fcc5-0a4b-4e7b-b53e-6a8f06cc0a78",
+    "title": "1.1 - Poisonous Families VS Heroic Families",
+    "description": "Transcript Let's talk about the differences between a poisonous family and a heroic family. Let's start with the poisonous. Poisonous family will slow you down. It creates confusion in the team. It looks weird or ugly. It makes the model larger and \u2026",
+    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/1.1---Poisonous-Families-VS-Heroic-Families.aspx"
+  },
   {
-    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Autodesk-Revit-Content-Catalog-User-Guide.aspx", 
-    "title": "Autodesk Revit Content Catalog User Guide", 
-    "description": "Introduction The Revit Content Catalog is a powerful repository for managing, and accessing Revit content such as families, detail items, and drafting views. This guide will walk you through how to effectively use the Content Catalog to enhance your\u2026"
-  }, 
+    "id": "cce59c8b-ea6b-4f24-bca3-17c6d2a69265",
+    "title": "Autodesk Revit Content Catalog User Guide",
+    "description": "Introduction The Revit Content Catalog is a powerful repository for managing, and accessing Revit content such as families, detail items, and drafting views. This guide will walk you through how to effectively use the Content Catalog to enhance your\u2026",
+    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Autodesk-Revit-Content-Catalog-User-Guide.aspx"
+  },
   {
-    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/BBB---Barn-Door---Double.aspx", 
-    "title": "BBB - Barn Door - Double", 
-    "description": "Overview This double barn door family template provides a foundation for creating pairs of sliding doors mounted on external tracks. The default size is set to 6'-0\" x 8'-0\", with each leaf being 3'-0\" wide. No pre-configured types are included \u2013 us\u2026"
-  }, 
+    "id": "6c5eb19d-3e0e-48d0-92bf-757e32143cad",
+    "title": "BBB - Barn Door - Double",
+    "description": "Overview This double barn door family template provides a foundation for creating pairs of sliding doors mounted on external tracks. The default size is set to 6'-0\" x 8'-0\", with each leaf being 3'-0\" wide. No pre-configured types are included \u2013 us\u2026",
+    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/BBB---Barn-Door---Double.aspx"
+  },
   {
-    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/BBB-Barn-Door-Single.aspx", 
-    "title": "BBB - Barn Door - Single", 
-    "description": "Overview This barn door family template provides a foundation for creating sliding doors mounted on external tracks. The default size is set to 3'-0\" x 8'-0\". No pre-configured types are included \u2013 users should create these based on project requirem\u2026"
-  }, 
+    "id": "c588014b-1c87-4047-ad81-b03999ed6e0f",
+    "title": "BBB - Barn Door - Single",
+    "description": "Overview This barn door family template provides a foundation for creating sliding doors mounted on external tracks. The default size is set to 3'-0\" x 8'-0\". No pre-configured types are included \u2013 users should create these based on project requirem\u2026",
+    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/BBB-Barn-Door-Single.aspx"
+  },
   {
-    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/BBB-Door-Double.aspx", 
-    "title": "BBB - Door - Double", 
-    "description": "Overview This double door family template provides a flexible foundation for creating pairs of doors with configurable dimensions and hardware. The default size is set to 6'-0\" x 7'-0\", with each leaf being 3'-0\" wide. No pre-configured types are in\u2026"
-  }, 
+    "id": "ffea8b67-6e28-4a2f-bc10-0e81fe7d6fea",
+    "title": "BBB - Door - Double",
+    "description": "Overview This double door family template provides a flexible foundation for creating pairs of doors with configurable dimensions and hardware. The default size is set to 6'-0\" x 7'-0\", with each leaf being 3'-0\" wide. No pre-configured types are in\u2026",
+    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/BBB-Door-Double.aspx"
+  },
   {
-    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/BBB-Door-Families.aspx", 
-    "title": "Door Families", 
-    "description": "BBB's standard template includes a core set of door families designed to handle common project needs. These templated families provide a foundation for creating project-specific door types while maintaining consistent standards across projects. Prel\u2026"
-  }, 
+    "id": "0c14241b-113c-4954-9135-b5cb760eccb8",
+    "title": "Door Families",
+    "description": "BBB's standard template includes a core set of door families designed to handle common project needs. These templated families provide a foundation for creating project-specific door types while maintaining consistent standards across projects. Prel\u2026",
+    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/BBB-Door-Families.aspx"
+  },
   {
-    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/BBB-Door-Single.aspx", 
-    "title": "BBB - Door - Single", 
-    "description": "Overview This door family template provides a flexible foundation for creating a single door family with configurable dimensions, hardware, and clearance requirements. The default size is set to 3'-0\" x 7'-0\", though no pre-configured types are incl\u2026"
-  }, 
+    "id": "cf09b279-896c-4568-b489-b755722300ea",
+    "title": "BBB - Door - Single",
+    "description": "Overview This door family template provides a flexible foundation for creating a single door family with configurable dimensions, hardware, and clearance requirements. The default size is set to 3'-0\" x 7'-0\", though no pre-configured types are incl\u2026",
+    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/BBB-Door-Single.aspx"
+  },
   {
-    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/BBB-Opening.aspx", 
-    "title": "BBB - Opening", 
-    "description": "Overview This cased opening template provides a simple foundation for creating wall openings with optional trim. The default size is set to 3'-0\" x 7'-0\". No pre-configured types are included \u2013 users should create these based on project requirements\u2026"
-  }, 
+    "id": "a09d96ea-442a-4612-a79e-1f5b066d325d",
+    "title": "BBB - Opening",
+    "description": "Overview This cased opening template provides a simple foundation for creating wall openings with optional trim. The default size is set to 3'-0\" x 7'-0\". No pre-configured types are included \u2013 users should create these based on project requirements\u2026",
+    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/BBB-Opening.aspx"
+  },
   {
-    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/BBB---Pocket-Door---Double.aspx", 
-    "title": "BBB - Pocket Door - Double", 
-    "description": "Overview This double pocket door family template provides a foundation for creating pairs of pocket doors internally mounted within the depth of a partition. The default size is set to 6'-0\" x 8'-0\", with each leaf being 3'-0\" wide. No pre-configure\u2026"
-  }, 
+    "id": "4359d592-9aa8-4587-ae26-8dc91b15ea2f",
+    "title": "BBB - Pocket Door - Double",
+    "description": "Overview This double pocket door family template provides a foundation for creating pairs of pocket doors internally mounted within the depth of a partition. The default size is set to 6'-0\" x 8'-0\", with each leaf being 3'-0\" wide. No pre-configure\u2026",
+    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/BBB---Pocket-Door---Double.aspx"
+  },
   {
-    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/BBB---Pocket-Door---Single.aspx", 
-    "title": "BBB - Pocket Door - Single", 
-    "description": "Overview This pocket door family template provides a foundation for creating pocket doors recessed within a partition. The default size is set to 3'-0\" x 7'-0\". No pre-configured types are included \u2013 users should create these based on project requir\u2026"
-  }, 
+    "id": "823edc6b-3827-4440-bfbe-a17a8202edfe",
+    "title": "BBB - Pocket Door - Single",
+    "description": "Overview This pocket door family template provides a foundation for creating pocket doors recessed within a partition. The default size is set to 3'-0\" x 7'-0\". No pre-configured types are included \u2013 users should create these based on project requir\u2026",
+    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/BBB---Pocket-Door---Single.aspx"
+  },
   {
-    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/BIM-Automations.aspx", 
-    "title": "BIM Automations", 
-    "description": "Introduction DCT offers a range of automation services to streamline Revit tasks and improve project efficiency. Signing a project up for model automations can be done via this form. Below is an outline of the services available and the information \u2026"
-  }, 
+    "id": "55bd249a-401b-4ff1-ba44-9fa43cd9b667",
+    "title": "BIM Automations",
+    "description": "Introduction DCT offers a range of automation services to streamline Revit tasks and improve project efficiency. Signing a project up for model automations can be done via this form. Below is an outline of the services available and the information \u2026",
+    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/BIM-Automations.aspx"
+  },
   {
-    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Building-Great-Families.aspx", 
-    "title": "Revit Family Essentials Training", 
-    "description": "Revit Family Essentials Training Solid Revit families are foundational to effective BIM practice. These training videos from BIM Pure cover everything from family fundamentals and parametric techniques through advanced topics like adaptive component\u2026"
-  }, 
+    "id": "7dbf3dcf-7500-4c37-bb0b-57224b1bada9",
+    "title": "Revit Family Essentials Training",
+    "description": "Revit Family Essentials Training Solid Revit families are foundational to effective BIM practice. These training videos from BIM Pure cover everything from family fundamentals and parametric techniques through advanced topics like adaptive component\u2026",
+    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Building-Great-Families.aspx"
+  },
   {
-    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Clearing-Your-Collaboration-Cache.aspx", 
-    "title": "Clearing Your Collaboration Cache", 
-    "description": "Consider regularly clearing your temporary cache files to improve Revit model stability / performance. Generally, this is good practice every other month or when your model has a critical error or crashes. This process will delete your local file(s)\u2026"
-  }, 
+    "id": "a6baa17b-2710-4675-95c4-52789932452d",
+    "title": "Clearing Your Collaboration Cache",
+    "description": "Ensure you do not have any models open or any un-synced changes from any proejct models before\u00a0taking any actions described on this page or you risk losing that data. Consider regularly clearing your temporary cache files to improve Revit model stab\u2026",
+    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Clearing-Your-Collaboration-Cache.aspx"
+  },
   {
-    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Dimension-Styles.aspx", 
-    "title": "Dimension Styles", 
-    "description": "Overview BBB's Revit template includes pre-loaded standard dimension styles to ensure consistent documentation across all projects. These styles are categorized by measurement type and have specific use cases for different documentation needs. Dimen\u2026"
-  }, 
+    "id": "3681bff5-20da-4cb5-ad2b-ed9a6f524b51",
+    "title": "Dimension Styles",
+    "description": "Overview BBB's Revit template includes pre-loaded standard dimension styles to ensure consistent documentation across all projects. These styles are categorized by measurement type and have specific use cases for different documentation needs. Dimen\u2026",
+    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Dimension-Styles.aspx"
+  },
   {
-    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Fill-Patterns.aspx", 
-    "title": "Fill Regions", 
-    "description": "Introduction The BBB Revit template includes 116 standard fill patterns designed for consistent use across projects. Each pattern follows a structured naming convention that must be applied when creating new patterns. Key Points: Material-specific h\u2026"
-  }, 
+    "id": "e147d4c1-1df1-4a08-b7d9-a30bd5093f97",
+    "title": "Fill Regions",
+    "description": "Introduction The BBB Revit template includes 116 standard fill patterns designed for consistent use across projects. Each pattern follows a structured naming convention that must be applied when creating new patterns. Key Points: Material-specific h\u2026",
+    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Fill-Patterns.aspx"
+  },
   {
-    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Graphic-Standards.aspx", 
-    "title": "Graphic Standards Overview", 
-    "description": "Clear, consistent graphics aren\u2019t just about aesthetics, they\u2019re essential for efficient collaboration and communication across all BBB projects. These standards define how we use key visual elements in Revit to ensure our drawings remain profession\u2026"
-  }, 
+    "id": "2271c828-f208-45dd-a804-c6e8466f4d0d",
+    "title": "Graphic Standards",
+    "description": "Clear, consistent graphics aren\u2019t just about aesthetics, they\u2019re essential for efficient collaboration and communication across all BBB projects. These standards define how we use key visual elements in Revit to ensure our drawings remain profession\u2026",
+    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Graphic-Standards.aspx"
+  },
   {
-    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Home.aspx", 
-    "title": "Home", 
-    "description": "Welcome to the BBB Revit Standards manual! Having consistent standards and naming conventions is key to creating a smooth workflow across all of BBB's projects. The standards you'll find here help everyone work efficiently and flexibly in Revit whil\u2026"
-  }, 
+    "id": "d960e9c9-0713-4666-9c2b-726f0208f751",
+    "title": "Home",
+    "description": "Welcome to the BBB Revit Standards manual! Having consistent standards and naming conventions is key to creating a smooth workflow across all of BBB's projects. The standards you'll find here help everyone work efficiently and flexibly in Revit whil\u2026",
+    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Home.aspx"
+  },
   {
-    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Line-Patterns.aspx", 
-    "title": "Line Patterns", 
-    "description": "BBB uses standardized line patterns across all projects to ensure uniformity and improve drawing readability. This guide outlines approved patterns, their typical uses, and implementation best practices. Line Pattern Description Common Uses Solid A \u2026"
-  }, 
+    "id": "93b29f4d-da1c-46ad-9c82-626449072c3f",
+    "title": "Line Patterns",
+    "description": "BBB uses standardized line patterns across all projects to ensure uniformity and improve drawing readability. This guide outlines approved patterns, their typical uses, and implementation best practices. Line Pattern Description Common Uses Solid A \u2026",
+    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Line-Patterns.aspx"
+  },
   {
-    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Line-Styles.aspx", 
-    "title": "Line Styles", 
-    "description": "Overview The BBB Revit template includes a comprehensive set of Line Styles for all drafting needs. Consistent use of these styles ensures uniformity across projects. These can be divided into 3 main groups, Core Styles, Use-Specific Styles, and Sys\u2026"
-  }, 
+    "id": "d2593bf7-8321-4b38-a5a1-9efd666365ab",
+    "title": "Line Styles",
+    "description": "Overview The BBB Revit template includes a comprehensive set of Line Styles for all drafting needs. Consistent use of these styles ensures uniformity across projects. These can be divided into 3 main groups, Core Styles, Use-Specific Styles, and Sys\u2026",
+    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Line-Styles.aspx"
+  },
   {
-    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Line-Weight-Guidelines.aspx", 
-    "title": "Line Weight Guidelines", 
-    "description": "Black Lines (Weights 1 - 5) Weight Usage 1 (Detail Lines) Dimension lines and text Light construction lines / fine details Hatch patterns Ceiling grid lines Annotation lines (leaders, callout bubbles) 2 (Light Lines) Items in immediate elevation Cut\u2026"
-  }, 
+    "id": "9b764c05-cc40-4e29-b156-a9d0d291d7f2",
+    "title": "Line Weight Guidelines",
+    "description": "Black Lines (Weights 1 - 5) Weight Usage 1 (Detail Lines) Dimension lines and text Light construction lines / fine details Hatch patterns Ceiling grid lines Annotation lines (leaders, callout bubbles) 2 (Light Lines) Items in immediate elevation Cut\u2026",
+    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Line-Weight-Guidelines.aspx"
+  },
   {
-    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Model-Setup.aspx", 
-    "title": "Project Setup", 
-    "description": "All BBB Revit models should be derived from the BBB Revit template file, which includes the default graphic styles, families, and shared parameters. To create a new project, a project team member should: Download the template file from the link. Ren\u2026"
-  }, 
+    "id": "edda2747-1785-4366-93b7-fd46beba0076",
+    "title": "Project Setup",
+    "description": "All BBB Revit models should be derived from the BBB Revit template file, which includes the default graphic styles, families, and shared parameters. To create a new project, a project team member should: Download the template file from the link. Ren\u2026",
+    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Model-Setup.aspx"
+  },
   {
-    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Parameter-Names.aspx", 
-    "title": "Parameters", 
-    "description": "Overview Revit parameters are essential components that control element properties and behaviors within projects and families. Understanding the different types of parameters and their appropriate usage is crucial for efficient project management an\u2026"
-  }, 
+    "id": "c05f2c55-9090-44d9-b162-e4896640a75a",
+    "title": "Parameters",
+    "description": "Overview Revit parameters are essential components that control element properties and behaviors within projects and families. Understanding the different types of parameters and their appropriate usage is crucial for efficient project management an\u2026",
+    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Parameter-Names.aspx"
+  },
   {
-    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Parameter-Naming.aspx", 
-    "title": "Parameter Naming", 
-    "description": "Naming Convention: [Special Prefix]_[Category]_[Property][_Suffix] Special Prefix S_ : Shared parameters Is_/Has_ : Boolean Parameters Family Parameters have no prefix Category (Optional) Use for specific sub-elements in a family (e.g., Jamb_, Head_\u2026"
-  }, 
+    "id": "443e831c-b51e-44ab-875a-83fa3bf4d8ed",
+    "title": "Parameter Naming",
+    "description": "Naming Convention: [Special Prefix]_[Category]_[Property][_Suffix] Special Prefix S_ : Shared parameters Is_/Has_ : Boolean Parameters Family Parameters have no prefix Category (Optional) Use for specific sub-elements in a family (e.g., Jamb_, Head_\u2026",
+    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Parameter-Naming.aspx"
+  },
   {
-    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/PDSO.aspx", 
-    "title": "Program Data Silo Objects (PDSO) Workflows", 
-    "description": "What is it? The Program Data Silo Object (PDSO) is a custom Revit workflow that creates a federated source of truth for spatial program data. Instead of spreading unit information across multiple area schemes and schedules, PDSO consolidates everyth\u2026"
-  }, 
+    "id": "0c280ffd-d212-4f09-b724-cc8b502b6b31",
+    "title": "Program Data Silo Objects (PDSO) Workflows",
+    "description": "What is it? The Program Data Silo Object (PDSO) is a custom Revit workflow that creates a federated source of truth for spatial program data. Instead of spreading unit information across multiple area schemes and schedules, PDSO consolidates everyth\u2026",
+    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/PDSO.aspx"
+  },
   {
-    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Point-Cloud-Tools.aspx", 
-    "title": "Point Cloud Tools", 
-    "description": "What is it? Point Cloud Tools is a custom workflow for recording and restoring the exact coordinates of point clouds in your Revit models. The tools ensure your point clouds stay in the correct location when reloading links, migrating to new models,\u2026"
-  }, 
+    "id": "6bd41b45-20a2-416a-8b31-718cd2355b7b",
+    "title": "Point Cloud Tools",
+    "description": "What is it? Point Cloud Tools is a custom workflow for recording and restoring the exact coordinates of point clouds in your Revit models. The tools ensure your point clouds stay in the correct location when reloading links, migrating to new models,\u2026",
+    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Point-Cloud-Tools.aspx"
+  },
   {
-    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Project-Browser-Organization.aspx", 
-    "title": "Project Browser Organization", 
-    "description": "Overview The BBB Revit Template provides structured organization for views and sheets in the Project Browser. The organization system is designed to maintain consistency across projects and improve navigation efficiency. Default View Organization Wh\u2026"
-  }, 
+    "id": "0db48d41-c1c1-4b47-8780-10bd3276a433",
+    "title": "Project Browser Organization",
+    "description": "Overview The BBB Revit Template provides structured organization for views and sheets in the Project Browser. The organization system is designed to maintain consistency across projects and improve navigation efficiency. Default View Organization Wh\u2026",
+    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Project-Browser-Organization.aspx"
+  },
   {
-    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/PyRevit.aspx", 
-    "title": "pyRevit", 
-    "description": "PyRevit is an add-in for Autodesk Revit that provides a comprehensive collection of productivity tools right out of the box. It adds a new ribbon to Revit packed with helpful features like batch sheet printing, view duplicating, selection tools, par\u2026"
-  }, 
+    "id": "4548a1a9-9833-49fb-a1ea-245f54ea24dd",
+    "title": "Project Location Setup",
+    "description": "This guide explains the coordinate systems and site location in Revit, as well as how to use the Project Location Setup tool to configure and record your project configuration. Each element serves a specific purpose in establishing your project's re\u2026",
+    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Project-Location-Setup.aspx"
+  },
   {
-    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Revit-Cloud-Model-Version-Upgrade.aspx", 
-    "title": "Revit Model Upgrade Process", 
-    "description": "DCT strongly recommends upgrading Revit projects to the version matching the current calendar year once they are more than 3 releases old. DCT's recommended upgrade process leverages Autodesk's Construction Cloud (ACC) service for upgrades. This pro\u2026"
-  }, 
+    "id": "e2a4d808-5f7c-4fd6-ae81-c8db135d2850",
+    "title": "pyRevit",
+    "description": "PyRevit is an add-in for Autodesk Revit that provides a comprehensive collection of productivity tools right out of the box. It adds a new ribbon to Revit packed with helpful features like batch sheet printing, view duplicating, selection tools, par\u2026",
+    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/PyRevit.aspx"
+  },
   {
-    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Revit-Model-Upgrade-Policy.aspx", 
-    "title": "Revit Model Upgrade Policy", 
-    "description": "DCT policy requires upgrading all models to the latest version once they're more than two years old. This ensures full Autodesk support throughout the project lifecycle and helps maintain model stability. We've set up an automated process that monit\u2026"
-  }, 
+    "id": "45c50be5-dc35-4d36-80a9-c52a0e31b1e0",
+    "title": "Revit Model Upgrade Process",
+    "description": "DCT strongly recommends upgrading Revit projects to the version matching the current calendar year once they are more than 3 releases old. DCT's recommended upgrade process leverages Autodesk's Construction Cloud (ACC) service for upgrades. This pro\u2026",
+    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Revit-Cloud-Model-Version-Upgrade.aspx"
+  },
   {
-    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Revit-Standards-Feedback-Form.aspx", 
-    "title": "Revit Standards Feedback Form", 
-    "description": null
-  }, 
+    "id": "f8fc9945-dab2-49ed-8bbd-c2acb4a88f37",
+    "title": "Revit Model Upgrade Policy",
+    "description": "DCT policy requires upgrading all models to the latest version once they're more than two years old. This ensures full Autodesk support throughout the project lifecycle and helps maintain model stability. We've set up an automated process that monit\u2026",
+    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Revit-Model-Upgrade-Policy.aspx"
+  },
   {
-    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Shared-Parameter-File.aspx", 
-    "title": "Shared Parameter File", 
-    "description": "Template File Location N:\\Design Technology Resources\\01_BIM CONTENT\\BBB Shared Parameters.txt Important Notes The .TXT file titled \"BB Shared Parameters\" contains system-generated GUIDs for each Shared Parameter. These GUIDs are unique and impossib\u2026"
-  }, 
+    "id": "19ae22e6-bfc7-4253-a264-cce4548e37ef",
+    "title": "Revit Standards Feedback Form",
+    "description": null,
+    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Revit-Standards-Feedback-Form.aspx"
+  },
   {
-    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Shared-Parameters.aspx", 
-    "title": "Shared Parameters", 
-    "description": "Overview The firmwide Revit template contains necessary Shared Parameters and Project Parameters for core functionality. These custom parameters should NOT be edited or removed without thorough understanding by a qualified BIM Manager. Best Practice\u2026"
-  }, 
+    "id": "9bac861f-13dc-4940-b824-43c413343faf",
+    "title": "Shared Parameter File",
+    "description": "Template File Location N:\\Design Technology Resources\\01_BIM CONTENT\\BBB Shared Parameters.txt Important Notes The .TXT file titled \"BB Shared Parameters\" contains system-generated GUIDs for each Shared Parameter. These GUIDs are unique and impossib\u2026",
+    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Shared-Parameter-File.aspx"
+  },
   {
-    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Standard-Shared-Parameters.aspx", 
-    "title": "Standard Shared Parameters", 
-    "description": "Parameter Category Parameter Name Use Sheet Parameters S_Sheet_Name S_Sheet_Drawing Number S_Sheet_Phase S_Sheet_Is For_Permitting S_Sheet_Is For_Construction S_Sheet_DOB Filing Number S_Sheet_Package S_Sheet_Sheet Numbers S_Sheet_Total Sheets Speci\u2026"
-  }, 
+    "id": "59c2871c-aaac-46e4-a364-edc24c9264e3",
+    "title": "Shared Parameters",
+    "description": "Overview The firmwide Revit template contains necessary Shared Parameters and Project Parameters for core functionality. These custom parameters should NOT be edited or removed without thorough understanding by a qualified BIM Manager. Best Practice\u2026",
+    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Shared-Parameters.aspx"
+  },
   {
-    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Suggesting-Changes-to-the-BBB-Template.aspx", 
-    "title": "Suggesting Updates or Changes to The Template", 
-    "description": "We value input from all team members to keep our standards current and effective. To suggest updates or changes: Document Your Suggestion : Clearly describe the proposed change, including: Specific section or item to be updated Rationale for the cha\u2026"
-  }, 
+    "id": "98fec05a-91f3-4d64-8f69-30d5f27386dd",
+    "title": "Standard Shared Parameters",
+    "description": "Parameter Category Parameter Name Use Sheet Parameters S_Sheet_Name S_Sheet_Drawing Number S_Sheet_Phase S_Sheet_Is For_Permitting S_Sheet_Is For_Construction S_Sheet_DOB Filing Number S_Sheet_Package S_Sheet_Sheet Numbers S_Sheet_Total Sheets Speci\u2026",
+    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Standard-Shared-Parameters.aspx"
+  },
   {
-    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Template-Line-Types.aspx", 
-    "title": "Template Line Types", 
-    "description": "Line Type Line Weight Color Color Code Pattern Comment 1 - Solid 1 Black \u25a0 Black Solid Typical Drafting 2 - Solid 3 Black \u25a0 Black Solid Typical Drafting 3 - Solid 5 Black \u25a0 Black Solid Typical Drafting 4 - Solid 7 Black \u25a0 Black Solid Typical Draftin\u2026"
-  }, 
+    "id": "03f633c1-ec81-4654-9581-7103f089ec9f",
+    "title": "Suggesting Updates or Changes to The Template",
+    "description": "We value input from all team members to keep our standards current and effective. To suggest updates or changes: Document Your Suggestion : Clearly describe the proposed change, including: Specific section or item to be updated Rationale for the cha\u2026",
+    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Suggesting-Changes-to-the-BBB-Template.aspx"
+  },
   {
-    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Text-Styles.aspx", 
-    "title": "Text Styles", 
-    "description": "Overview BBB documents use Arial Narrow as the standard font. To maintain consistency across all BBB documentation, adhere to the standard document text styles provided in the template. Avoid importing additional fonts or creating new text styles un\u2026"
-  }, 
+    "id": "b4768562-73b7-4b48-a3ca-0a5e35413f36",
+    "title": "Template Line Types",
+    "description": "Line Type Line Weight Color Color Code Pattern Comment 1 - Solid 1 Black \u25a0 Black Solid Typical Drafting 2 - Solid 3 Black \u25a0 Black Solid Typical Drafting 3 - Solid 5 Black \u25a0 Black Solid Typical Drafting 4 - Solid 7 Black \u25a0 Black Solid Typical Draftin\u2026",
+    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Template-Line-Types.aspx"
+  },
   {
-    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/The-BBB-Revit-Toolbar.aspx", 
-    "title": "The BBB Revit Toolbar", 
-    "description": "The BBB Revit Toolbar adds custom BBB-designed tools to Revit to help you manage your data, wrangle your point clouds, and quickly link you to the latest standards and support. Developed specifically for BBB workflows, this toolbar streamlines commo\u2026"
-  }, 
+    "id": "e7a77a8e-a818-4f82-8119-90b661aaa3ff",
+    "title": "Text Styles",
+    "description": "Overview BBB documents use Arial Narrow as the standard font. To maintain consistency across all BBB documentation, adhere to the standard document text styles provided in the template. Avoid importing additional fonts or creating new text styles un\u2026",
+    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Text-Styles.aspx"
+  },
   {
-    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Titleblocks.aspx", 
-    "title": "Title Blocks", 
-    "description": "The BBB Revit template comes with a selection of title blocks as outlined in the table opposite. These may be modified to suit particular project needs, or jurisdictional requirements. Copies of these can be found here. Standard Size Variations ANSI\u2026"
-  }, 
+    "id": "1ae95d8a-7796-4e08-8129-1c1514279ebe",
+    "title": "The BBB Revit Toolbar",
+    "description": "The BBB Revit Toolbar adds custom BBB-designed tools to Revit to help you manage your data, wrangle your point clouds, and quickly link you to the latest standards and support. Developed specifically for BBB workflows, this toolbar streamlines commo\u2026",
+    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/The-BBB-Revit-Toolbar.aspx"
+  },
   {
-    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Training-and-Guidance.aspx", 
-    "title": "Guidance and Training", 
-    "description": "Training Courses How to Build Great Families BBB Core Tech Classes In-depth training videos organized by topic Quick Revit Guides Fundamentals Families Phases Part I Phases Part II Reference Planes Worksets Groups Part I Groups Part II In this secti\u2026"
-  }, 
+    "id": "116571de-d314-4778-9cbc-ce805b146996",
+    "title": "Title Blocks",
+    "description": "The BBB Revit template comes with a selection of title blocks as outlined in the table opposite. These may be modified to suit particular project needs, or jurisdictional requirements. Copies of these can be found here. Standard Size Variations ANSI\u2026",
+    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Titleblocks.aspx"
+  },
   {
-    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/View-Filters.aspx", 
-    "title": "View Filter Naming Convention", 
-    "description": "Basic Format [Category Being Filtered] - [Property Being Filtered For] - (Isolate) Components Breakdown 1. Category Being Filtered Use the Revit category name (e.g., Walls, Windows, Views) For multi-category filters, separate categories with '+' 2. \u2026"
-  }, 
+    "id": "f74175c7-161f-47d4-9604-02791203f3d5",
+    "title": "Guidance and Training",
+    "description": "Training Courses How to Build Great Families BBB Core Tech Classes In-depth training videos organized by topic Quick Revit Guides Fundamentals Families Phases Part I Phases Part II Reference Planes Worksets Groups Part I Groups Part II In this secti\u2026",
+    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Training-and-Guidance.aspx"
+  },
   {
-    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/View-Templates.aspx", 
-    "title": "View Templates", 
-    "description": "Overview The BBB Revit template includes pre-configured View Templates designed to work seamlessly with View Types and Browser Organization for efficient project management. Best Practices Use existing View Templates whenever possible. If creating a\u2026"
-  }, 
+    "id": "6ea61e1d-d398-4021-b694-bb547bd6162a",
+    "title": "Update Scales",
+    "description": "The Update Scales tool automatically synchronizes the graphic scale notation on sheet views by updating the S_Sheet_Graphic Scale parameter to match each view\u2019s drawing scale, when using the BBB - View Title - Graphic Scale viewport type. What It Do\u2026",
+    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Update-Graphic-Scales.aspx"
+  },
   {
-    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/View-Types.aspx", 
-    "title": "View Types", 
-    "description": "Introduction BBB's Revit template includes customized view types for Plans, Sections, Elevations, and Callouts. These view types are designed to work in conjunction with View Templates and are integrated with browser organization and sorting systems\u2026"
-  }, 
+    "id": "be021a03-5afa-4179-93bb-d1613c91c67f",
+    "title": "View Filter Naming Convention",
+    "description": "Basic Format [Category Being Filtered] - [Property Being Filtered For] - (Isolate) Components Breakdown 1. Category Being Filtered Use the Revit category name (e.g., Walls, Windows, Views) For multi-category filters, separate categories with '+' 2. \u2026",
+    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/View-Filters.aspx"
+  },
   {
-    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Wall-Types.aspx", 
-    "title": "Wall Types", 
-    "description": "BBB uses a standardized naming convention for wall types in Revit to allow for quick identification of wall characteristics based on a type mark and description. These wall types are outlined on the template partition types sheet A-700 and A-701. Ty\u2026"
-  }, 
+    "id": "65a0d28b-7193-49b2-bedf-cadef23f90d2",
+    "title": "View Templates",
+    "description": "Overview The BBB Revit template includes pre-configured View Templates designed to work seamlessly with View Types and Browser Organization for efficient project management. Best Practices Use existing View Templates whenever possible. If creating a\u2026",
+    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/View-Templates.aspx"
+  },
   {
-    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Wall-Types---1.aspx", 
-    "title": "Wall Types - Revised", 
-    "description": "BBB uses a standardized naming convention for wall types in Revit to allow for quick identification of wall characteristics based on a type mark and description. These wall types are outlined on the template partition types sheet A-700 and A-701. Ty\u2026"
-  }, 
+    "id": "32ae2be6-4732-478b-9e0d-73cd6387df9b",
+    "title": "View Types",
+    "description": "Introduction BBB's Revit template includes customized view types for Plans, Sections, Elevations, and Callouts. These view types are designed to work in conjunction with View Templates and are integrated with browser organization and sorting systems\u2026",
+    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/View-Types.aspx"
+  },
   {
-    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Worksets(1).aspx", 
-    "title": "Workset Management Standards", 
-    "description": "1. Workset Naming Conventions Purpose Consistent workset naming and organization is essential for efficient collaboration, model performance, and file management. This page defines our firm's standard workset organization strategy, naming convention\u2026"
+    "id": "8af94fbf-f186-4592-8f0b-66a6ce3ffa22",
+    "title": "Legacy Wall Types",
+    "description": "This guide applies to Revit projects started prior to Feb 1, 2026. For newer projects then - please see the current wall type standard. BBB uses a standardized naming convention for wall types in Revit to allow for quick identification of wall chara\u2026",
+    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Wall-Types.aspx"
+  },
+  {
+    "id": "8781f37c-81af-4b6f-a8ba-08d11236d8b4",
+    "title": "Wall Types",
+    "description": "This guide applies to Revit projects started from Feb 1, 2026 onwards. For projects started before then - please see the legacy wall type standard. BBB uses a standardized naming convention for wall types in Revit to allow for quick identification o\u2026",
+    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Wall-Types---1.aspx"
+  },
+  {
+    "id": "0acfa175-5e68-482d-aa29-0874dbe6f0be",
+    "title": "Workset Management Standards",
+    "description": "1. Workset Naming Conventions Purpose Consistent workset naming and organization is essential for efficient collaboration, model performance, and file management. This page defines our firm's standard workset organization strategy, naming convention\u2026",
+    "url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Worksets(1).aspx"
   }
 ]

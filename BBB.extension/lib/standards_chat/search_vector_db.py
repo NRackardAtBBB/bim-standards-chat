@@ -8,6 +8,7 @@ Runs in Python 3 to perform semantic search on the vector database
 import sys
 import os
 import json
+import base64
 
 # Add lib path
 script_dir = os.path.dirname(__file__)
@@ -33,7 +34,12 @@ def main():
             }))
             return 1
         
-        query = sys.argv[1]
+        # Check for base64 flag
+        if len(sys.argv) >= 3 and sys.argv[1] == '--base64':
+             query_raw = sys.argv[2]
+             query = base64.b64decode(query_raw).decode('utf-8')
+        else:
+             query = sys.argv[1]
         
         # Initialize clients
         config = ConfigManager()

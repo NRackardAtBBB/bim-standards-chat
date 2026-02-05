@@ -26,6 +26,8 @@ except:
 
 import json
 from datetime import datetime
+import hashlib
+import time
 
 try:
     import chromadb
@@ -63,7 +65,8 @@ class VectorDBClient:
         self.chunk_size = self.config.get_config('vector_search.chunk_size', 500)
         self.chunk_overlap = self.config.get_config('vector_search.chunk_overlap', 100)
         self.max_results = self.config.get_config('vector_search.max_results', 10)
-        self.similarity_threshold = self.config.get_config('vector_search.similarity_threshold', 0.5)
+        # Force low threshold to 0.15. The embedding model might be returning low similarities for this domain.
+        self.similarity_threshold = self.config.get_config('vector_search.similarity_threshold', 0.15)
         self.semantic_weight = self.config.get_config('vector_search.hybrid_search_weight_semantic', 0.7)
         self.keyword_weight = self.config.get_config('vector_search.hybrid_search_weight_keyword', 0.3)
         
@@ -86,6 +89,41 @@ class VectorDBClient:
         
         # Initialize tokenizer for chunking
         self.tokenizer = tiktoken.encoding_for_model("gpt-3.5-turbo")
+        
+        # Initialize query cache (TTL-based in-memory cache)
+        self.query_cache = {}
+        self.cache_ttl = 300  # 5 minutes TTL
+    
+    def _get_cache_key(self, query, n_results, search_type='hybrid'):
+        """Generate cache key from query parameters."""
+        cache_str = "{}|{}|{}".format(query.lower().strip(), n_results, search_type)
+        return hashlib.md5(cache_str.encode('utf-8')).hexdigest()
+    
+    def _get_cached_results(self, cache_key):
+        """Get cached results if not expired."""
+        if cache_key in self.query_cache:
+            cached_data = self.query_cache[cache_key]
+            if time.time() - cached_data['timestamp'] < self.cache_ttl:
+                return cached_data['results']
+            else:
+                # Expired, remove from cache
+                del self.query_cache[cache_key]
+        return None
+    
+    def _cache_results(self, cache_key, results):
+        """Cache search results with timestamp."""
+        self.query_cache[cache_key] = {
+            'results': results,
+            'timestamp': time.time()
+        }
+        
+        # Simple cache cleanup: remove oldest entries if cache grows too large
+        if len(self.query_cache) > 100:
+            # Remove oldest 20 entries
+            sorted_keys = sorted(self.query_cache.keys(), 
+                               key=lambda k: self.query_cache[k]['timestamp'])
+            for key in sorted_keys[:20]:
+                del self.query_cache[key]
     
     def is_developer_mode_enabled(self):
         """Check if developer mode is enabled for current user."""
@@ -165,6 +203,37 @@ class VectorDBClient:
         )
         return response.data[0].embedding
     
+    def get_embeddings_batch(self, texts):
+        """
+        Generate embeddings for multiple texts in a single API call.
+        OpenAI supports up to 2048 texts per request.
+        
+        Args:
+            texts: List of text strings to embed
+            
+        Returns:
+            List of embedding vectors (list of floats)
+        """
+        if not texts:
+            return []
+        
+        # OpenAI API supports up to 2048 inputs per request
+        batch_size = 2048
+        all_embeddings = []
+        
+        for i in range(0, len(texts), batch_size):
+            batch = texts[i:i + batch_size]
+            response = self.openai_client.embeddings.create(
+                model=self.embedding_model,
+                input=batch,
+                dimensions=self.embedding_dimensions
+            )
+            # Extract embeddings in order
+            batch_embeddings = [item.embedding for item in response.data]
+            all_embeddings.extend(batch_embeddings)
+        
+        return all_embeddings
+    
     def index_documents(self, documents):
         """
         Index a list of documents into the vector database.
@@ -176,6 +245,11 @@ class VectorDBClient:
             Dict with counts of documents and chunks indexed
         """
         total_chunks = 0
+        
+        # Collect all chunks first for batch embedding
+        all_chunks = []
+        all_chunk_ids = []
+        all_chunk_metadata = []
         
         for doc in documents:
             # Extract document content and metadata
@@ -194,19 +268,25 @@ class VectorDBClient:
             # Chunk the document
             chunks = self.chunk_text(content, base_metadata)
             
-            # Generate embeddings and add to collection
+            # Collect chunks for batch processing
             for chunk in chunks:
                 chunk_id = "{}_chunk_{}".format(base_metadata['doc_id'], chunk['metadata']['chunk_index'])
-                embedding = self.get_embedding(chunk['content'])
-                
-                # Add to ChromaDB
-                self.collection.add(
-                    ids=[chunk_id],
-                    embeddings=[embedding],
-                    documents=[chunk['content']],
-                    metadatas=[chunk['metadata']]
-                )
+                all_chunks.append(chunk['content'])
+                all_chunk_ids.append(chunk_id)
+                all_chunk_metadata.append(chunk['metadata'])
                 total_chunks += 1
+        
+        # Generate embeddings in batch (MAJOR PERFORMANCE IMPROVEMENT)
+        if all_chunks:
+            embeddings = self.get_embeddings_batch(all_chunks)
+            
+            # Add all chunks to ChromaDB
+            self.collection.add(
+                ids=all_chunk_ids,
+                embeddings=embeddings,
+                documents=all_chunks,
+                metadatas=all_chunk_metadata
+            )
         
         return {
             'documents': len(documents),
@@ -275,7 +355,8 @@ class VectorDBClient:
     
     def keyword_search(self, query, n_results=None):
         """
-        Perform keyword-based search using metadata filtering.
+        Perform keyword-based search using ChromaDB's where_document filtering.
+        More efficient than loading all documents into memory.
         
         Args:
             query: Search query text
@@ -287,43 +368,60 @@ class VectorDBClient:
         if n_results is None:
             n_results = self.max_results
         
-        # Extract keywords (simple split on whitespace)
-        keywords = query.lower().split()
+        # Extract keywords (simple split on whitespace and remove short words)
+        keywords = [k for k in query.lower().split() if len(k) > 2]
         
-        # Get all documents
-        all_docs = self.collection.get(include=['metadatas', 'documents'])
+        if not keywords:
+            return []
         
-        # Score documents based on keyword matches
+        # Use ChromaDB's where_document filter for efficient text search
+        # Query for documents containing any of the keywords
         scored_results = []
-        for i, doc_id in enumerate(all_docs['ids']):
-            metadata = all_docs['metadatas'][i]
-            content = all_docs['documents'][i]
-            
-            # Calculate keyword match score
-            title = metadata.get('title', '').lower()
-            content_lower = content.lower()
-            
-            score = 0
-            for keyword in keywords:
-                # Title matches worth more
-                if keyword in title:
-                    score += 10
-                # Content matches
-                score += content_lower.count(keyword)
-            
-            if score > 0:
-                scored_results.append({
-                    'id': metadata.get('doc_id', doc_id),
-                    'chunk_id': doc_id,
-                    'title': metadata.get('title', 'Untitled'),
-                    'url': metadata.get('url', ''),
-                    'content': content,
-                    'category': metadata.get('category', 'General'),
-                    'score': score,
-                    'chunk_index': metadata.get('chunk_index', 0),
-                    'total_chunks': metadata.get('total_chunks', 1),
-                    'last_updated': metadata.get('last_updated', '')
-                })
+        
+        for keyword in keywords:
+            try:
+                # Use $contains operator for substring matching
+                results = self.collection.get(
+                    where_document={"$contains": keyword},
+                    include=['metadatas', 'documents']
+                )
+                
+                # Score results based on keyword relevance
+                for i, doc_id in enumerate(results['ids']):
+                    metadata = results['metadatas'][i]
+                    content = results['documents'][i]
+                    title = metadata.get('title', '').lower()
+                    content_lower = content.lower()
+                    
+                    # Calculate score for this keyword
+                    score = 0
+                    # Title matches worth more (10 points per occurrence)
+                    score += title.count(keyword) * 10
+                    # Content matches (1 point per occurrence)
+                    score += content_lower.count(keyword)
+                    
+                    # Check if we already have this document from another keyword
+                    existing = next((r for r in scored_results if r['chunk_id'] == doc_id), None)
+                    if existing:
+                        # Add to existing score
+                        existing['score'] += score
+                    else:
+                        # Add new result
+                        scored_results.append({
+                            'id': metadata.get('doc_id', doc_id),
+                            'chunk_id': doc_id,
+                            'title': metadata.get('title', 'Untitled'),
+                            'url': metadata.get('url', ''),
+                            'content': content,
+                            'category': metadata.get('category', 'General'),
+                            'score': score,
+                            'chunk_index': metadata.get('chunk_index', 0),
+                            'total_chunks': metadata.get('total_chunks', 1),
+                            'last_updated': metadata.get('last_updated', '')
+                        })
+            except Exception as e:
+                # If where_document fails, continue with other keywords
+                continue
         
         # Sort by score and return top results
         scored_results.sort(key=lambda x: x['score'], reverse=True)
@@ -358,31 +456,52 @@ class VectorDBClient:
         
         return results
     
-    def deduplicate_by_url(self, results):
+    def deduplicate_by_url(self, results, max_chunks_per_url=2):
         """
-        Deduplicate results by URL, keeping highest scoring chunk per page.
+        Deduplicate results by URL, keeping top N scoring chunks per page.
+        This preserves context from multiple relevant sections of the same document.
         
         Args:
             results: List of results potentially with multiple chunks from same page
+            max_chunks_per_url: Maximum number of chunks to keep per unique URL (default: 2)
             
         Returns:
-            Deduplicated results with one entry per unique URL
+            Deduplicated results with up to max_chunks_per_url entries per unique URL
         """
         url_map = {}
         
         for result in results:
             url = result['url']
-            if url not in url_map or result['score'] > url_map[url]['score']:
-                url_map[url] = result
+            if url not in url_map:
+                url_map[url] = []
+            url_map[url].append(result)
+        
+        # Keep top N chunks per URL
+        deduplicated = []
+        for url, chunks in url_map.items():
+            # Sort chunks by score and take top N
+            chunks.sort(key=lambda x: x['score'], reverse=True)
+            deduplicated.extend(chunks[:max_chunks_per_url])
         
         # Return sorted by score
-        deduplicated = list(url_map.values())
         deduplicated.sort(key=lambda x: x['score'], reverse=True)
         return deduplicated
-    
+    def get_all_titles(self):
+        """Get list of all unique document titles in the database."""
+        try:
+            result = self.collection.get(include=['metadatas'])
+            titles = set()
+            for meta in result['metadatas']:
+                if meta and 'title' in meta:
+                    titles.add(meta['title'])
+            return sorted(list(titles))
+        except:
+            return []
+
     def hybrid_search(self, query, n_results=None, deduplicate=True):
         """
         Perform hybrid search combining semantic and keyword approaches.
+        Uses TTL-based caching to avoid redundant API calls for identical queries.
         
         Args:
             query: Search query text
@@ -395,23 +514,68 @@ class VectorDBClient:
         if n_results is None:
             n_results = self.max_results
         
+        # Check for meta-queries about available documents
+        query_lower = query.lower()
+        meta_triggers = ["what do you have access to", "what information", "what documents", "what standards", "list available", "available standards", "documents do you have", "what can you see"]
+        
+        synthetic_results = []
+        if any(trigger in query_lower for trigger in meta_triggers):
+            all_titles = self.get_all_titles()
+            if all_titles:
+                title_list = "\n".join(["- " + t for t in all_titles])
+                synthetic_results.append({
+                    'id': 'system_index',
+                    'chunk_id': 'system_index_0',
+                    'title': 'System Index: All Available Standards',
+                    'url': 'system:index',
+                    'content': "The following is a complete list of all standard documents currently indexed and available for retrieval:\n\n" + title_list + "\n\nUse this list to identify which specific standards the user might be interested in.",
+                    'category': 'System',
+                    'score': 2.0, # Force to top
+                    'normalized_score': 1.0,
+                    'hybrid_score': 2.0,
+                    'chunk_index': 0,
+                    'total_chunks': 1,
+                    'last_updated': datetime.now().isoformat()
+                })
+
+        # Check cache first
+        cache_key = self._get_cache_key(query, n_results, 'hybrid')
+        cached_results = self._get_cached_results(cache_key)
+        if cached_results is not None:
+            return cached_results
+        
         # Perform both searches (get more results for merging)
         semantic_results = self.semantic_search(query, n_results * 2)
         keyword_results = self.keyword_search(query, n_results * 2)
         
-        # Normalize scores for each result set
-        semantic_results = self.normalize_scores(semantic_results)
+        # NOTE: We do NOT normalize semantic scores anymore, as they are cosine similarities
+        # that roughly map to absolute relevance (0-1). Normalizing them by batch min/max
+        # caused good results to be scored 0.0 if they were the "least good" in a good batch.
+        # keyword_results still need normalization as they are unbounded counts.
         keyword_results = self.normalize_scores(keyword_results)
         
         # Merge results by chunk_id
         merged_map = {}
         
-        # Add semantic results
+        # Add semantic results (using raw score as normalized_score)
         for result in semantic_results:
             chunk_id = result['chunk_id']
+            # Treat raw cosine similarity as the normalized score
+            result['normalized_score'] = result['score'] 
+            
             merged_map[chunk_id] = result.copy()
-            merged_map[chunk_id]['hybrid_score'] = result['normalized_score'] * self.semantic_weight
-            merged_map[chunk_id]['semantic_score'] = result['normalized_score']
+            # If search term is explicitly in title, boost semantic score significantly
+            title_boost = 0.0
+            title_lower = result.get('title', '').lower()
+            if any(term in title_lower for term in query.lower().split() if len(term) > 3):
+                 title_boost = 0.2
+            
+            # Massive boost if exact acronym match
+            if 'pdso' in query.lower() and 'pdso' in title_lower:
+                title_boost = 0.4
+
+            merged_map[chunk_id]['hybrid_score'] = (result['score'] + title_boost) * self.semantic_weight
+            merged_map[chunk_id]['semantic_score'] = result['score'] + title_boost
             merged_map[chunk_id]['keyword_score'] = 0
         
         # Add/merge keyword results
@@ -441,7 +605,13 @@ class VectorDBClient:
             merged_results = self.deduplicate_by_url(merged_results)
         
         # Return top n results
-        return merged_results[:n_results]
+        # Prepend synthetic results (forcing them to be included)
+        final_results = synthetic_results + merged_results[:n_results]
+        
+        # Cache the results
+        self._cache_results(cache_key, final_results)
+        
+        return final_results
     
     def get_stats(self):
         """

@@ -3,6 +3,54 @@
 Utility Functions
 Helper functions for extracting context and formatting
 """
+import sys
+
+def safe_str(obj):
+    """Safely convert any object to a unicode string, handling encoding errors."""
+    # Check actual type name to avoid IronPython isinstance bugs
+    type_name = type(obj).__name__
+    
+    if type_name == 'unicode':
+        return obj
+    
+    if type_name == 'str':
+        # IronPython str may contain unicode chars - try multiple approaches
+        try:
+            # First try UTF-8 decode
+            return obj.decode('utf-8')
+        except (UnicodeDecodeError, AttributeError):
+            try:
+                # Try latin-1 which never fails
+                return obj.decode('latin-1')
+            except:
+                try:
+                    # Last resort: force unicode constructor
+                    return unicode(obj, errors='replace')
+                except:
+                    # Give up and use repr
+                    return unicode(repr(obj))
+    
+    try:
+        if isinstance(obj, Exception):
+            # Try args first as they are often the source of the message
+            if hasattr(obj, 'args') and obj.args:
+                return u", ".join([safe_str(arg) for arg in obj.args])
+        return unicode(obj)
+    except Exception:
+        try:
+            return unicode(repr(obj))
+        except Exception:
+            return u"<unprintable object>"
+
+def safe_print(msg):
+    """Safely print to stdout, handling encoding for IronPython console."""
+    try:
+        if not isinstance(msg, unicode):
+            msg = safe_str(msg)
+        # Encode to ascii with replacement to be absolutely safe in Revit console
+        print(msg.encode('ascii', 'replace'))
+    except Exception:
+        print("<failed to print message>")
 
 try:
     from Autodesk.Revit.DB import *

@@ -191,6 +191,15 @@
                                 <TextBlock x:Name="indexed_chunks_text" Text="0" FontSize="20" Foreground="{StaticResource PrimaryColor}"/>
                             </StackPanel>
                         </Grid>
+                        
+                        <Button x:Name="reindex_vector_db_btn" 
+                                Content="Re-index Vector Database" 
+                                HorizontalAlignment="Left"
+                                Click="reindex_vector_db_click"
+                                Margin="0,15,0,0"
+                                Padding="15,8"
+                                Style="{StaticResource PrimaryButtonStyle}"
+                                ToolTip="Rebuild the vector database with optimized chunk settings. This will improve search quality and use new performance optimizations."/>
                     </StackPanel>
                 </GroupBox>
                 

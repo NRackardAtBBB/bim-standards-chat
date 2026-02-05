@@ -20,13 +20,14 @@ from System.Windows.Media.Imaging import BitmapImage
 from System.Windows.Media.Animation import DoubleAnimation, RepeatBehavior
 from System.Windows import Thickness, TextWrapping, HorizontalAlignment, Duration
 from System.Threading import Thread, ThreadStart
-from System.Windows.Threading import Dispatcher
+from System.Windows.Threading import Dispatcher, DispatcherTimer
 from System import TimeSpan, Uri
 import System
 import os
 import sys
 import time
 import json
+import random
 
 # Add lib path
 script_dir = os.path.dirname(__file__)
@@ -37,7 +38,7 @@ if lib_path not in sys.path:
 from standards_chat.notion_client import NotionClient
 from standards_chat.anthropic_client import AnthropicClient
 from standards_chat.config_manager import ConfigManager
-from standards_chat.utils import extract_revit_context
+from standards_chat.utils import extract_revit_context, safe_print, safe_str
 from standards_chat.usage_logger import UsageLogger
 from standards_chat.revit_actions import RevitActionExecutor, parse_action_from_response
 from standards_chat.history_manager import HistoryManager
@@ -115,6 +116,35 @@ class StandardsChatWindow(Window):
 
         # Animation
         self.spin_animation = None
+        self.typing_timer = None
+        
+        # Cute loading messages
+        self.loading_messages = [
+            "Digging through the standards vault...",
+            "Consulting the BIM oracle...",
+            "Summoning the Revit spirits...",
+            "Checking under all the annotation layers...",
+            "Asking the elders...",
+            "Rifling through the file cabinet...",
+            "Squinting at the fine print...",
+            "Putting on reading glasses...",
+            "Connecting brain cells...",
+            "Warming up the neural networks...",
+            "Doing some mental gymnastics...",
+            "Caffeinating the algorithms...",
+            "Firing up the search engines...",
+            "Spinning up the knowledge wheels...",
+            "Crunching the data...",
+            "Indexing all the things...",
+            "Pretending to think really hard...",
+            "Buying time with this cute message...",
+            "Looking very busy and important...",
+            "This is taking longer than expected...",
+            "Adding suspense for dramatic effect...",
+            "Taking my sweet time (jk)...",
+            "Running in circles (efficiently)..."
+        ]
+        self.current_message_index = 0
         
         # Initialize clients
         try:
@@ -134,19 +164,26 @@ class StandardsChatWindow(Window):
             self.vector_db_client = None
             try:
                 if self.config.get_config('features.enable_vector_search', False):
-                    # Use dynamic import to avoid IronPython parsing issues
-                    vector_db_module = __import__('standards_chat.vector_db_client', fromlist=['VectorDBClient'])
-                    VectorDBClient = vector_db_module.VectorDBClient
-                    temp_vdb = VectorDBClient(self.config)
-                    if temp_vdb.is_developer_mode_enabled():
-                        self.vector_db_client = temp_vdb
-            except ImportError as e:
-                # Vector search packages not installed - silently fall back to keyword search
-                # This is expected if chromadb/openai packages aren't installed
-                pass
+                    # 1. Try Native Client (CPython)
+                    try:
+                        # Use dynamic import to avoid IronPython parsing issues
+                        vector_db_module = __import__('standards_chat.vector_db_client', fromlist=['VectorDBClient'])
+                        VectorDBClient = vector_db_module.VectorDBClient
+                        temp_vdb = VectorDBClient(self.config)
+                        if temp_vdb.is_developer_mode_enabled():
+                            self.vector_db_client = temp_vdb
+                    except ImportError:
+                        # 2. Native failed (IronPython or missing pkgs), try Interop Client
+                        try:
+                            # Use interop client to call CLI
+                            interop_module = __import__('standards_chat.vector_db_interop', fromlist=['VectorDBInteropClient'])
+                            VectorDBInteropClient = interop_module.VectorDBInteropClient
+                            self.vector_db_client = VectorDBInteropClient(self.config)
+                        except Exception as ex:
+                            safe_print("Vector DB Interop failed: {}".format(safe_str(ex)))
             except Exception as e:
                 # Other errors should be logged
-                print("Vector DB initialization error: {}".format(str(e)))
+                safe_print("Vector DB initialization error: {}".format(safe_str(e)))
             
             # Initialize usage logger
             central_log_dir = self.config.get('logging', 'central_log_dir')
@@ -172,11 +209,11 @@ class StandardsChatWindow(Window):
                     with open(index_path, 'r') as f:
                         self.sharepoint_index = json.load(f)
             except Exception as e:
-                print("Error loading SharePoint index: {}".format(str(e)))
+                safe_print("Error loading SharePoint index: {}".format(safe_str(e)))
             
         except Exception as e:
             # Show error in status
-            self.status_text.Text = "Configuration Error: {}".format(str(e))
+            self.status_text.Text = "Configuration Error: {}".format(safe_str(e))
             self.send_button.IsEnabled = False
             return
         
@@ -214,7 +251,7 @@ class StandardsChatWindow(Window):
             psi.UseShellExecute = True
             Process.Start(psi)
         except Exception as e:
-            print("Error opening URL: {}".format(str(e)))
+            safe_print("Error opening URL: {}".format(safe_str(e)))
     
     def _load_header_icon(self):
         """Load the icon from the button folder into the header"""
@@ -241,10 +278,10 @@ class StandardsChatWindow(Window):
                 bitmap.EndInit()
                 self.header_icon.Source = bitmap
             else:
-                print("Icon file not found at: {}".format(icon_path))
+                safe_print("Icon file not found at: {}".format(safe_str(icon_path)))
         except Exception as e:
             # Print error for debugging
-            print("Could not load header icon: {}".format(str(e)))
+            safe_print("Could not load header icon: {}".format(safe_str(e)))
     
     def _get_user_display_name(self):
         """Get user's display name for personalization"""
@@ -564,7 +601,7 @@ class StandardsChatWindow(Window):
                 self.refresh_history_list()
                 
         except Exception as e:
-            print("Error deleting session: {}".format(str(e)))
+            safe_print("Error deleting session: {}".format(safe_str(e)))
     
     def on_new_chat_click(self, sender, args):
         """Start a new chat session"""
@@ -839,31 +876,18 @@ class StandardsChatWindow(Window):
             try:
                 # print("DEBUG: process_query started")
                 # Update status: Searching
-                self.update_typing_status("Searching BBB's Revit standards...")
+                # self.update_typing_status("Searching BBB's Revit standards...")
                 
-                # Extract keywords using index
+                # Use direct user input for search - vector search handles semantics natively
                 search_query = user_input
                 keyword_tokens_in = 0
                 keyword_tokens_out = 0
-                
-                if hasattr(self, 'sharepoint_index') and self.sharepoint_index:
-                    # self.update_typing_status("Optimizing search query...")
-                    keyword_result = self.anthropic.get_search_keywords(user_input, self.sharepoint_index)
-                    
-                    if isinstance(keyword_result, dict):
-                        search_query = keyword_result.get('keywords', user_input)
-                        keyword_tokens_in = keyword_result.get('input_tokens', 0)
-                        keyword_tokens_out = keyword_result.get('output_tokens', 0)
-                    else:
-                        search_query = keyword_result
-                    
-                    # print("DEBUG: Optimized query: {}".format(search_query))
                 
                 # Search standards - use vector search if available
                 # print("DEBUG: Calling search_standards")
                 if self.vector_db_client is not None:
                     # Use hybrid vector search (semantic + keyword)
-                    self.update_typing_status("Performing semantic search...")
+                    # self.update_typing_status("Performing semantic search...")
                     relevant_pages = self.vector_db_client.hybrid_search(
                         query=user_input,  # Use original user input for semantic search
                         deduplicate=True
@@ -875,22 +899,26 @@ class StandardsChatWindow(Window):
                     # print("DEBUG: search_standards returned {} pages".format(len(relevant_pages)))
                 
                 # Update status: Found results
-                if relevant_pages:
-                    self.update_typing_status("Found {} page(s), analyzing content...".format(len(relevant_pages)))
-                else:
-                    self.update_typing_status("Preparing response...")
+                # if relevant_pages:
+                #    self.update_typing_status("Found {} page(s), analyzing content...".format(len(relevant_pages)))
+                # else:
+                #    self.update_typing_status("Preparing response...")
                 
                 # Update status: Generating
-                self.update_typing_status("Generating response...")
+                # self.update_typing_status("Generating response...")
                 
                 # Remove typing indicator and add empty message bubble for streaming
                 self.Dispatcher.Invoke(self.start_streaming_response)
                 
                 # Callback for streaming chunks
                 def on_chunk(text_chunk):
-                    self.Dispatcher.Invoke(
-                        lambda: self.append_to_streaming_response(text_chunk)
-                    )
+                    try:
+                        safe_print(u"DEBUG: on_chunk callback received chunk")
+                        self.Dispatcher.Invoke(
+                            lambda: self.append_to_streaming_response(text_chunk)
+                        )
+                    except Exception as e:
+                        safe_print(u"ERROR in on_chunk callback: {}".format(safe_str(e)))
                 
                 # Get streaming response from Claude
                 response = self.anthropic.get_response_stream(
@@ -958,7 +986,7 @@ class StandardsChatWindow(Window):
                         if new_title:
                             self.session_title = new_title
                     except Exception as e:
-                        print("Title generation failed: " + str(e))
+                        safe_print("Title generation failed: " + safe_str(e))
                 
                 # Auto-save session after each exchange
                 self.save_current_session()
@@ -972,10 +1000,8 @@ class StandardsChatWindow(Window):
                 )
                 
             except Exception as e:
-                # print("DEBUG: Error in process_query: " + str(e))
                 import traceback
-                # traceback.print_exc()
-                error_msg = "Sorry, I encountered an error: {}".format(str(e))
+                error_msg = u"Sorry, I encountered an error: {}".format(safe_str(e))
                 self.Dispatcher.Invoke(
                     lambda: self.replace_typing_with_response(error_msg, None)
                 )
@@ -990,6 +1016,12 @@ class StandardsChatWindow(Window):
         thread.IsBackground = True
         thread.Start()
     
+    def rotate_loading_message(self, sender, e):
+        """Rotates through cute loading messages"""
+        if hasattr(self, 'typing_status_text') and self.typing_status_text:
+            message = random.choice(self.loading_messages)
+            self.typing_status_text.Text = message
+
     def add_typing_indicator(self):
         """Add animated typing indicator bubble with status text on same line"""
         # Create border (message bubble)
@@ -1028,7 +1060,7 @@ class StandardsChatWindow(Window):
 
         # Status text on same line as dots
         status_text = TextBlock()
-        status_text.Text = "Searching BBB's Revit standards..."
+        status_text.Text = random.choice(self.loading_messages)
         status_text.FontSize = 11
         status_text.Foreground = self.FindResource("TextSecondaryColor")
         status_text.Margin = Thickness(8, 0, 0, 0)
@@ -1049,14 +1081,19 @@ class StandardsChatWindow(Window):
         )
 
         dots_stack.Children.Add(status_text)
-
         border.Child = dots_stack
+
+        # Start timer for rotating text
+        self.current_message_index = 0
+        self.typing_timer = DispatcherTimer()
+        self.typing_timer.Interval = TimeSpan.FromSeconds(2.0)
+        self.typing_timer.Tick += self.rotate_loading_message
+        self.typing_timer.Start()
 
         # Wrap with bot avatar and set Name on container for removal
         container = self._wrap_with_avatar(border, is_user=False)
         container.Name = "TypingIndicator"
         self.messages_panel.Children.Add(container)
-
         # Store reference for updates
         self.typing_status_text = status_text
 
@@ -1065,8 +1102,16 @@ class StandardsChatWindow(Window):
     
     def replace_typing_with_response(self, text, sources):
         """Remove typing indicator and add actual response"""
+
+        # Stop timer if running
+        if hasattr(self, 'typing_timer') and self.typing_timer:
+            self.typing_timer.Stop()
+            self.typing_timer = None
+            
         self._find_and_remove_typing_indicator()
 
+        # Add the actual response
+        self.add_message(text, is_user=False, sources=sources)
         # Add the actual response
         self.add_message(text, is_user=False, sources=sources)
     
@@ -1077,7 +1122,7 @@ class StandardsChatWindow(Window):
                 lambda: setattr(self.typing_status_text, 'Text', status)
             )
     
-    def _find_and_remove_typing_indicator(self):
+def _find_and_remove_typing_indicator(self):
         """Find and remove the typing indicator from messages panel"""
         for child in self.messages_panel.Children:
             if hasattr(child, 'Name') and child.Name == "TypingIndicator":
@@ -1087,6 +1132,11 @@ class StandardsChatWindow(Window):
 
     def start_streaming_response(self):
         """Remove typing indicator and create empty message bubble for streaming"""
+        # Stop timer if running
+        if hasattr(self, 'typing_timer') and self.typing_timer:
+            self.typing_timer.Stop()
+            self.typing_timer = None
+
         self._find_and_remove_typing_indicator()
 
         # Create border (message bubble)
@@ -1109,37 +1159,52 @@ class StandardsChatWindow(Window):
         # Store references
         self.streaming_textblock = textblock
         self.streaming_border = border
-        self.streaming_text = ""
-
+self.streaming_text = u""
         # Scroll to bottom
         self.message_scrollviewer.ScrollToBottom()
     
     def append_to_streaming_response(self, text_chunk):
         """Append text chunk to streaming response"""
-        if hasattr(self, 'streaming_textblock') and self.streaming_textblock:
-            self.streaming_text += text_chunk
-            
-            # Re-render with formatting each time
-            self.streaming_textblock.Inlines.Clear()
-            self._add_formatted_text(self.streaming_textblock, self.streaming_text)
-            
-            # Scroll to bottom
-            self.message_scrollviewer.ScrollToBottom()
+        try:
+            if hasattr(self, 'streaming_textblock') and self.streaming_textblock:
+                # CRITICAL: After Dispatcher.Invoke crossing, text_chunk becomes .NET String
+                # Convert it back to Python unicode using str() to force through Python type system
+                text_chunk = unicode(str(text_chunk))
+                
+                # Defensive: ensure streaming_text is also Python unicode
+                if not isinstance(self.streaming_text, unicode):
+                    self.streaming_text = unicode(str(self.streaming_text))
+                
+                # Now both are Python unicode - safe to concatenate
+                self.streaming_text = self.streaming_text + text_chunk
+                
+                # Re-render with formatting
+                self.streaming_textblock.Inlines.Clear()
+                self._add_formatted_text(self.streaming_textblock, self.streaming_text)
+                
+                # Scroll to bottom
+                self.message_scrollviewer.ScrollToBottom()
+        except Exception as e:
+            safe_print(u"ERROR in append_to_streaming_response: {}".format(safe_str(e)))
+            import traceback
+            safe_print(u"Traceback: {}".format(safe_str(traceback.format_exc())))
     
     def finish_streaming_response(self, sources):
         """Add sources and apply formatting to completed streaming response"""
-        if hasattr(self, 'streaming_textblock') and self.streaming_textblock:
-            # Check for actions in the response FIRST
-            actions = parse_action_from_response(self.streaming_text)
-            
-            # Remove JSON blocks from the displayed text
+        try:
+            if hasattr(self, 'streaming_textblock') and self.streaming_textblock:
+                # Check for actions in the response FIRST
+                actions = parse_action_from_response(self.streaming_text)
+                
+                # Remove JSON blocks from the displayed text
             import re
             display_text = self.streaming_text
             if actions:
                 # Remove all JSON code blocks
-                display_text = re.sub(r'```json\s*\{.*?\}\s*```', '', display_text, flags=re.DOTALL)
+                # Use unicode pattern to avoid encoding errors with input text
+                display_text = re.sub(u'```json\s*\{.*?\}\s*```', u'', display_text, flags=re.DOTALL)
                 # Clean up extra whitespace
-                display_text = re.sub(r'\n{3,}', '\n\n', display_text)
+                display_text = re.sub(u'\n{3,}', u'\n\n', display_text)
                 display_text = display_text.strip()
             
             # Clear and reformat with markdown (WITHOUT the JSON)
@@ -1158,7 +1223,7 @@ class StandardsChatWindow(Window):
                 if actions:
                     self._add_action_buttons(self.streaming_border, actions)
             
-            # Add subdued source links
+# Add subdued source links
             self._add_sources_to_textblock(self.streaming_textblock, sources)
             
             # Scroll to bottom
@@ -1167,11 +1232,17 @@ class StandardsChatWindow(Window):
             # Clean up
             self.streaming_textblock = None
             self.streaming_border = None
-            self.streaming_text = ""
+            self.streaming_text = u""
+        except Exception as e:
+            safe_print("Error in finish_streaming_response: {}".format(safe_str(e)))
+            # Don't crash processing, just finish up
+            self.streaming_textblock = None
+            self.streaming_border = None
+            self.streaming_text = u""
     
     def _add_action_buttons(self, parent_border, actions):
         """Add action buttons to response bubble"""
-        print("DEBUG: _add_action_buttons called with {} actions".format(len(actions)))
+        # safe_print("DEBUG: _add_action_buttons called with {} actions".format(len(actions)))
         
         from System.Windows.Controls import Button, StackPanel
         
@@ -1182,18 +1253,18 @@ class StandardsChatWindow(Window):
             # Get the existing textblock and remove it from border
             existing_textblock = parent_border.Child
             parent_border.Child = None  # CRITICAL: Remove from border first!
-            print("DEBUG: Got existing textblock and removed from border")
+            # safe_print("DEBUG: Got existing textblock and removed from border")
             
             # Create new stack panel to hold text + buttons
             stack = StackPanel()
             stack.Children.Add(existing_textblock)
-            print("DEBUG: Created stack panel and added textblock")
+            # safe_print("DEBUG: Created stack panel and added textblock")
             
             # Add buttons for each action
             for i, action_data in enumerate(actions):
-                print("DEBUG: Creating button {} for action type: {}".format(
-                    i, action_data.get('type', 'unknown')
-                ))
+                # safe_print("DEBUG: Creating button {} for action type: {}".format(
+                #     i, action_data.get('type', 'unknown')
+                # ))
                 button = Button()
                 button.Content = action_data.get('label', 'Execute Action')
                 button.Style = self.FindResource("ActionButtonStyle")
@@ -1205,7 +1276,7 @@ class StandardsChatWindow(Window):
                 button.Click += self.on_action_button_click
                 
                 stack.Children.Add(button)
-                print("DEBUG: Button {} added to stack".format(i))
+                # safe_print("DEBUG: Button {} added to stack".format(i))
                 
                 # Set first button as active (can be triggered with Enter)
                 if i == 0:
@@ -1213,12 +1284,12 @@ class StandardsChatWindow(Window):
             
             # Set stack panel as border content
             parent_border.Child = stack
-            print("DEBUG: Stack panel set as border child - {} children total".format(stack.Children.Count))
+            # safe_print("DEBUG: Stack panel set as border child - {} children total".format(stack.Children.Count))
             
         except Exception as e:
-            print("DEBUG: Error in _add_action_buttons: {}".format(str(e)))
+            safe_print("DEBUG: Error in _add_action_buttons: {}".format(safe_str(e)))
             import traceback
-            traceback.print_exc()
+            # traceback.print_exc()
     
     def on_action_button_click(self, sender, args):
         """Handle action button click"""
@@ -1266,7 +1337,7 @@ class StandardsChatWindow(Window):
             try:
                 self.Dispatcher.Invoke(System.Action(update_ui))
             except Exception as e:
-                print("Error updating UI: {}".format(str(e)))
+                safe_print("Error updating UI: {}".format(safe_str(e)))
         
         try:
             # Check if this is a workflow
@@ -1280,7 +1351,7 @@ class StandardsChatWindow(Window):
         
         except Exception as e:
             forms.alert(
-                "Error executing action:\n{}".format(str(e)),
+                "Error executing action:\n{}".format(safe_str(e)),
                 title="Error",
                 warn_icon=True
             )
@@ -1320,8 +1391,7 @@ class StandardsChatWindow(Window):
 
         # Add subdued source links
         if sources and not is_user:
-            self._add_sources_to_textblock(textblock, sources)
-
+self._add_sources_to_textblock(textblock, sources)
         border.Child = textblock
 
         # Wrap with avatar and add to panel
@@ -1333,95 +1403,119 @@ class StandardsChatWindow(Window):
     
     def _add_formatted_text(self, textblock, text):
         """Add text with basic markdown formatting"""
-        import re
-        
-        lines = text.split('\n')
-        for i, line in enumerate(lines):
-            if i > 0:
-                textblock.Inlines.Add(Run("\n"))
+        try:
+            # Text should already be unicode from append_to_streaming_response
+            # No extensive logging needed anymore
+            import re
             
-            # Handle headers (make bold and slightly larger)
-            if line.strip().startswith('#'):
-                header_text = line.strip().lstrip('#').strip()
-                run = Run("\n" + header_text + "\n")
-                run.FontWeight = System.Windows.FontWeights.Bold
-                run.FontSize = 15
-                textblock.Inlines.Add(run)
-                continue
+            lines = text.split(u'\n')
+            
+            for i, line in enumerate(lines):
+                if i > 0:
+                    textblock.Inlines.Add(Run(u"\n"))
                 
-            # Handle bullet points
-            prefix = ""
-            content = line
-            if line.strip().startswith('- ') or line.strip().startswith('* '):
-                prefix = "  • "
-                content = line.strip()[2:]
-            # Handle numbered lists
-            elif re.match(r'^\d+\.\s', line.strip()):
-                match = re.match(r'^(\d+\.\s)(.*)', line.strip())
-                prefix = "  " + match.group(1)
-                content = match.group(2)
-            
-            if prefix:
-                textblock.Inlines.Add(Run(prefix))
-            
-            # Process inline formatting (Bold and Links)
-            # Regex for markdown links: [text](url)
-            link_pattern = r'(\[[^\]]+\]\([^)]+\))'
-            parts = re.split(link_pattern, content)
-            
-            for part in parts:
-                # Check if it's a markdown link
-                link_match = re.match(r'\[([^\]]+)\]\(([^)]+)\)', part)
-                if link_match:
-                    link_text = link_match.group(1)
-                    link_url = link_match.group(2)
+                # Handle headers (make bold and slightly larger)
+                if line.strip().startswith(u'#'):
+                    header_text = line.strip().lstrip(u'#').strip()
+                    run = Run(u"\n" + header_text + u"\n")
+                    run.FontWeight = System.Windows.FontWeights.Bold
+                    run.FontSize = 15
+                    textblock.Inlines.Add(run)
+                    continue
                     
-                    hyperlink = Hyperlink()
-                    hyperlink.Inlines.Add(Run(link_text))
-                    try:
-                        hyperlink.NavigateUri = System.Uri(link_url)
-                        hyperlink.RequestNavigate += self.on_hyperlink_click
-                        hyperlink.Foreground = self.FindResource("PrimaryColor")
-                        textblock.Inlines.Add(hyperlink)
-                    except:
-                        textblock.Inlines.Add(Run(link_text))
-                else:
-                    # Check for raw URLs in the text part
-                    # Regex for raw URLs: http://... or https://...
-                    url_pattern = r'(https?://[^\s]+)'
-                    sub_parts = re.split(url_pattern, part)
-                    
-                    for sub_part in sub_parts:
-                        if re.match(url_pattern, sub_part):
-                            # It's a raw URL
+                # Handle bullet points
+                prefix = u""
+                content = line
+                if line.strip().startswith(u'- ') or line.strip().startswith(u'* '):
+                    prefix = u"  \u2022 "
+                    content = line.strip()[2:]
+                # Handle numbered lists
+                elif re.match(u'^\d+\.\s', line.strip()):
+                    match = re.match(u'^(\d+\.\s)(.*)', line.strip())
+                    prefix = u"  " + match.group(1)
+                    content = match.group(2)
+                
+                if prefix:
+                    textblock.Inlines.Add(Run(prefix))
+                
+                try:
+                    # Process inline formatting (Bold and Links)
+                    # Regex for markdown links: [text](url)
+                    link_pattern = u'(\[[^\]]+\]\([^)]+\))'
+                    parts = re.split(link_pattern, content)
+                
+                    for part in parts:
+                        # Check if it's a markdown link
+                        link_match = re.match(u'\[([^\]]+)\]\(([^)]+)\)', part)
+                        if link_match:
+                            link_text = link_match.group(1)
+                            link_url = link_match.group(2)
+                            
                             hyperlink = Hyperlink()
-                            hyperlink.Inlines.Add(Run(sub_part)) # Display the URL itself
+                            hyperlink.Inlines.Add(Run(link_text))
                             try:
-                                hyperlink.NavigateUri = System.Uri(sub_part)
+                                hyperlink.NavigateUri = System.Uri(link_url)
                                 hyperlink.RequestNavigate += self.on_hyperlink_click
                                 hyperlink.Foreground = self.FindResource("PrimaryColor")
                                 textblock.Inlines.Add(hyperlink)
                             except:
-                                textblock.Inlines.Add(Run(sub_part))
+                                textblock.Inlines.Add(Run(link_text))
                         else:
-                            # Process bold in non-link text
-                            if '**' in sub_part:
-                                bold_parts = re.split(r'(\*\*.*?\*\*)', sub_part)
-                                for bold_part in bold_parts:
-                                    if bold_part.startswith('**') and bold_part.endswith('**'):
-                                        run = Run(bold_part[2:-2])
-                                        run.FontWeight = System.Windows.FontWeights.Bold
-                                        textblock.Inlines.Add(run)
-                                    elif bold_part:
-                                        textblock.Inlines.Add(Run(bold_part))
-                            else:
-                                if sub_part:
-                                    textblock.Inlines.Add(Run(sub_part))
+                            # Check for raw URLs in the text part
+                            # Regex for raw URLs: http://... or https://...
+                            url_pattern = u'(https?://[^\s]+)'
+                            sub_parts = re.split(url_pattern, part)
+                            
+                            for sub_part in sub_parts:
+                                if re.match(url_pattern, sub_part):
+                                    # It's a raw URL
+                                    hyperlink = Hyperlink()
+                                    hyperlink.Inlines.Add(Run(sub_part))
+                                    try:
+                                        hyperlink.NavigateUri = System.Uri(sub_part)
+                                        hyperlink.RequestNavigate += self.on_hyperlink_click
+                                        hyperlink.Foreground = self.FindResource("PrimaryColor")
+                                        textblock.Inlines.Add(hyperlink)
+                                    except:
+                                        textblock.Inlines.Add(Run(sub_part))
+                                else:
+                                    # Process bold in non-link text
+                                    if u'**' in sub_part:
+                                        bold_parts = re.split(u'(\*\*.*?\*\*)', sub_part)
+                                        for bold_part in bold_parts:
+                                            if bold_part.startswith(u'**') and bold_part.endswith(u'**'):
+                                                run = Run(bold_part[2:-2])
+                                                run.FontWeight = System.Windows.FontWeights.Bold
+                                                textblock.Inlines.Add(run)
+                                            elif bold_part:
+                                                textblock.Inlines.Add(Run(bold_part))
+                                    else:
+                                        if sub_part:
+                                            textblock.Inlines.Add(Run(sub_part))
+                except Exception as line_error:
+                    safe_print(u"ERROR processing line in _add_formatted_text: {}".format(safe_str(line_error)))
+                    # Add the line as plain text if formatting fails
+                    try:
+                        textblock.Inlines.Add(Run(safe_str(line)))
+                    except:
+                        pass
+        except Exception as e:
+            safe_print(u"ERROR in _add_formatted_text: {}".format(safe_str(e)))
+            import traceback
+            safe_print(u"Traceback: {}".format(safe_str(traceback.format_exc())))
+            # Add text as plain if formatting completely fails
+            try:
+                textblock.Inlines.Add(Run(safe_str(text)))
+            except:
+                textblock.Inlines.Add(Run(u"<Error displaying text>"))
     
     def on_hyperlink_click(self, sender, args):
         """Open hyperlink in browser"""
         import webbrowser
-        webbrowser.open(str(args.Uri))
+        try:
+            webbrowser.open(args.Uri.ToString())
+        except Exception as e:
+            safe_print("Error opening link: " + safe_str(e))
         args.Handled = True
     
     def show_loading(self, status="Loading..."):

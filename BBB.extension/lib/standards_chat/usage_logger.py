@@ -10,6 +10,7 @@ import time
 import base64
 from datetime import datetime, timedelta
 import hashlib
+from standards_chat.utils import safe_print, safe_str
 
 
 class UsageLogger:
@@ -150,10 +151,20 @@ class UsageLogger:
     def _write_local_log(self, entry):
         """Write entry to local log file"""
         try:
-            with open(self.local_log_file, 'a') as f:
-                f.write(json.dumps(entry) + '\n')
+            # Force utf-8 encoding for file open
+            import io
+            with io.open(self.local_log_file, 'a', encoding='utf-8') as f:
+                # Ensure json dump produces ascii-safe string
+                json_str = json.dumps(entry, ensure_ascii=True)
+                f.write(unicode(json_str) + u'\n')
         except Exception as e:
-            print("Error writing local log: {}".format(str(e)))
+            # Fallback for severe encoding issues
+            try:
+                with open(self.local_log_file, 'a') as f:
+                    # Fallback to ascii-escaped json
+                    f.write(json.dumps(entry, ensure_ascii=True) + '\n')
+            except Exception:
+                pass # Give up silencing error to avoid crashing app
     
     def _write_central_log(self, entry, username, session_id):
         """Write entry to central network location (session specific file)"""
@@ -180,11 +191,20 @@ class UsageLogger:
             
             # Append to session file (list of objects)
             # Using JSONL is safer for appending and PowerBI supports it
-            with open(file_path, 'a') as f:
-                f.write(json.dumps(entry) + '\n')
+            import io
+            with io.open(file_path, 'a', encoding='utf-8') as f:
+                json_str = json.dumps(entry, ensure_ascii=True)
+                f.write(unicode(json_str) + u'\n')
                 
         except Exception as e:
-            print("Could not write to central log: {}".format(str(e)))
+            # Fallback
+            try:
+                # Use standard open with ascii escaping
+                file_path = os.path.join(self.central_log_dir, filename)
+                with open(file_path, 'a') as f:
+                     f.write(json.dumps(entry, ensure_ascii=True) + '\n')
+            except:
+                safe_print("Could not write to central log: {}".format(safe_str(e)))
 
     def _save_screenshot(self, base64_str, session_id, timestamp):
         """Save screenshot to central directory"""
@@ -207,7 +227,7 @@ class UsageLogger:
                 
             return file_path
         except Exception as e:
-            print("Error saving screenshot: {}".format(str(e)))
+            safe_print("Error saving screenshot: {}".format(safe_str(e)))
             return None
     
     def _get_anonymous_user_id(self):
@@ -325,6 +345,6 @@ class UsageLogger:
             )
             
         except Exception as e:
-            print("Error calculating stats: {}".format(str(e)))
+            safe_print("Error calculating stats: {}".format(safe_str(e)))
         
         return stats

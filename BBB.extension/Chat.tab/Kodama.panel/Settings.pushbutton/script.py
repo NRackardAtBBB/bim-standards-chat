@@ -278,6 +278,101 @@ class SettingsWindow(forms.WPFWindow):
                 title="Error",
                 warn_icon=True
             )
+    
+    def reindex_vector_db_click(self, sender, args):
+        """Re-index vector database with current SharePoint content"""
+        try:
+            # Confirm action
+            if not forms.alert(
+                "This will rebuild the vector database from scratch using the latest SharePoint content.\n\n"
+                "This may take a few minutes. Continue?",
+                title="Confirm Re-index",
+                yes=True,
+                no=True
+            ):
+                return
+            
+            # Save current settings first
+            self._save_config_to_disk()
+            
+            # Show progress
+            System.Windows.Input.Mouse.OverrideCursor = System.Windows.Input.Cursors.Wait
+            
+            try:
+                # Import required modules
+                from standards_chat.config_manager import ConfigManager
+                from standards_chat.sharepoint_client import SharePointClient
+                
+                # Check if running in cpython (required for vector DB)
+                try:
+                    from standards_chat.vector_db_client import VectorDBClient
+                except ImportError as e:
+                    forms.alert(
+                        "Vector database requires Python 3 with chromadb, openai, and tiktoken packages.\n\n"
+                        "Error: {}".format(str(e)),
+                        title="Import Error",
+                        warn_icon=True
+                    )
+                    return
+                
+                # Initialize clients
+                config_manager = ConfigManager()
+                sharepoint_client = SharePointClient(config_manager)
+                vector_db_client = VectorDBClient(config_manager)
+                
+                # Check if user is authorized
+                if not vector_db_client.is_developer_mode_enabled():
+                    forms.alert(
+                        "Vector search is not available for your user.\n\n"
+                        "Contact your administrator to be added to the developer whitelist.",
+                        title="Access Denied",
+                        warn_icon=True
+                    )
+                    return
+                
+                # Perform sync
+                result = sharepoint_client.sync_to_vector_db(
+                    vector_db_client,
+                    progress_callback=None
+                )
+                
+                if result.get('success'):
+                    # Update UI with new stats
+                    self.indexed_docs_text.Text = str(result.get('documents', 0))
+                    self.indexed_chunks_text.Text = str(result.get('chunks', 0))
+                    
+                    # Update sync status
+                    from datetime import datetime
+                    sync_time = datetime.now()
+                    self.sync_status_text.Text = "Last synced: {}".format(sync_time.strftime("%Y-%m-%d %H:%M:%S"))
+                    
+                    forms.alert(
+                        "Successfully re-indexed {} documents into {} chunks.\n\n"
+                        "The chatbot will now use the updated vector database with improved performance.".format(
+                            result.get('documents', 0),
+                            result.get('chunks', 0)
+                        ),
+                        title="Re-index Complete"
+                    )
+                else:
+                    forms.alert(
+                        "Re-indexing failed:\n{}".format(result.get('error', 'Unknown error')),
+                        title="Error",
+                        warn_icon=True
+                    )
+                    
+            finally:
+                System.Windows.Input.Mouse.OverrideCursor = None
+                
+        except Exception as e:
+            System.Windows.Input.Mouse.OverrideCursor = None
+            forms.alert(
+                "Error during re-indexing:\n{}".format(str(e)),
+                title="Error",
+                warn_icon=True
+            )
+            import traceback
+            traceback.print_exc()
 
     def save_click(self, sender, args):
         """Save button click handler"""
