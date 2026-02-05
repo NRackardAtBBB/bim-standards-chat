@@ -454,24 +454,99 @@ class StandardsChatWindow(Window):
             container.Children.Add(bubble)
             container.Children.Add(avatar)
         else:
-            # Assistant: [avatar] [bubble] [flex space]
+            # Assistant: [avatar] [bubble/content]
             col1 = ColumnDefinition()
             col1.Width = GridLength.Auto
             col2 = ColumnDefinition()
-            col2.Width = GridLength.Auto
-            col3 = ColumnDefinition()
-            col3.Width = GridLength(1, GridUnitType.Star)
+            col2.Width = GridLength(1, GridUnitType.Star) # Take remaining space to allow wrapping
             container.ColumnDefinitions.Add(col1)
             container.ColumnDefinitions.Add(col2)
-            container.ColumnDefinitions.Add(col3)
 
             avatar = self._create_bot_avatar()
             Grid.SetColumn(avatar, 0)
+            
+            # Align content to left but allow it to stretch if needed?
+            # Actually for bubble we usually want it HorizontalAlignment.Left
+            if hasattr(bubble, 'HorizontalAlignment'):
+                bubble.HorizontalAlignment = HorizontalAlignment.Left
+                
             Grid.SetColumn(bubble, 1)
             container.Children.Add(avatar)
             container.Children.Add(bubble)
 
         return container
+
+    def _create_sources_panel(self, sources):
+        """Create a separate panel for sources (displayed below bubble)"""
+        if not sources:
+            return None
+            
+        from System.Windows.Controls import StackPanel, WrapPanel
+        
+        panel = WrapPanel() 
+        panel.Orientation = Orientation.Horizontal
+        panel.Margin = Thickness(12, 4, 0, 8) # Indent slightly from bubble left
+        
+        grey_brush = SolidColorBrush(Color.FromRgb(0x60, 0x5E, 0x5C))
+        
+        # Try to load SharePoint icon
+        sp_icon_bitmap = None
+        try:
+            script_dir = os.path.dirname(__file__)
+            lib_dir = os.path.dirname(script_dir)
+            sp_icon_path = os.path.join(lib_dir, 'ui', 'sharepoint_icon.png')
+            if os.path.exists(sp_icon_path):
+                sp_icon_bitmap = BitmapImage()
+                sp_icon_bitmap.BeginInit()
+                sp_icon_bitmap.UriSource = Uri("file:///" + sp_icon_path.replace("\\", "/"))
+                sp_icon_bitmap.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad
+                sp_icon_bitmap.EndInit()
+        except:
+            pass
+
+        for source in sources:
+            # Create a pill/chip for each source
+            source_border = Border()
+            source_border.Background = SolidColorBrush(Color.FromRgb(0xF3, 0xF2, 0xF1))
+            source_border.CornerRadius = System.Windows.CornerRadius(12)
+            source_border.Padding = Thickness(8, 4, 8, 4)
+            source_border.Margin = Thickness(0, 0, 8, 4)
+            
+            # Content stack for the chip
+            chip_stack = StackPanel()
+            chip_stack.Orientation = Orientation.Horizontal
+            
+            # Icon
+            if sp_icon_bitmap:
+                img = Image()
+                img.Source = sp_icon_bitmap
+                img.Width = 12
+                img.Height = 12
+                img.Margin = Thickness(0, 1, 6, 0)
+                chip_stack.Children.Add(img)
+            
+            # Link Text
+            # We use a Button styled as a link or just a clickable text
+            # Creating a Hyperlink inside a TextBlock inside the chip
+            
+            tb = TextBlock()
+            
+            hyperlink = Hyperlink()
+            link_run = Run(source['title'])
+            link_run.FontSize = 11
+            hyperlink.Inlines.Add(link_run)
+            hyperlink.NavigateUri = System.Uri(source['url'])
+            hyperlink.RequestNavigate += self.on_hyperlink_click
+            hyperlink.Foreground = grey_brush
+            hyperlink.TextDecorations = None
+            
+            tb.Inlines.Add(hyperlink)
+            chip_stack.Children.Add(tb)
+            
+            source_border.Child = chip_stack
+            panel.Children.Add(source_border)
+            
+        return panel
 
     def _add_sources_to_textblock(self, textblock, sources):
         """Add subdued source links to a textblock"""
@@ -1150,13 +1225,18 @@ class StandardsChatWindow(Window):
 
         border.Child = textblock
 
+        # Create stack for content (will hold bubble + eventual sources)
+        content_stack = StackPanel()
+        content_stack.Children.Add(border)
+
         # Wrap with bot avatar
-        container = self._wrap_with_avatar(border, is_user=False)
+        container = self._wrap_with_avatar(content_stack, is_user=False)
         self.messages_panel.Children.Add(container)
 
         # Store references
         self.streaming_textblock = textblock
         self.streaming_border = border
+        self.streaming_content_stack = content_stack
         self.streaming_text = u""
         
         # Scroll to bottom
@@ -1222,8 +1302,11 @@ class StandardsChatWindow(Window):
                     if actions:
                         self._add_action_buttons(self.streaming_border, actions)
                 
-                # Add subdued source links
-                self._add_sources_to_textblock(self.streaming_textblock, sources)
+                # Add subdued source links below bubble
+                if sources:
+                    sources_panel = self._create_sources_panel(sources)
+                    if sources_panel and hasattr(self, 'streaming_content_stack'):
+                        self.streaming_content_stack.Children.Add(sources_panel)
             
             # Scroll to bottom
             self.message_scrollviewer.ScrollToBottom()
