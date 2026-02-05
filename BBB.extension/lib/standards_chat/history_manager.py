@@ -7,6 +7,7 @@ Manages chat session history storage and retrieval
 import json
 import os
 from datetime import datetime
+from standards_chat.utils import safe_print, safe_str
 
 
 class HistoryManager:
@@ -35,7 +36,7 @@ class HistoryManager:
             try:
                 os.makedirs(self.history_dir)
             except Exception as e:
-                print("Error creating history directory: {}".format(str(e)))
+                safe_print("Error creating history directory: {}".format(safe_str(e)))
     
     def create_new_session(self):
         """
@@ -72,10 +73,19 @@ class HistoryManager:
         filepath = os.path.join(self.history_dir, '{}.json'.format(session_id))
         
         try:
-            with open(filepath, 'w') as f:
-                json.dump(session_data, f, indent=2)
+            import io
+            # Use io.open for consistent unicode handling in Python 2 (IronPython)
+            with io.open(filepath, 'w', encoding='utf-8') as f:
+                # ensure_ascii=True forces ascii, which is safest for avoiding codec errors
+                json_str = json.dumps(session_data, indent=2, ensure_ascii=True)
+                f.write(unicode(json_str)) # Write the ascii-escaped unicode string
         except Exception as e:
-            print("Error saving session: {}".format(str(e)))
+            # Fallback
+            try:
+                with open(filepath, 'w') as f:
+                     json.dump(session_data, f, indent=2, ensure_ascii=True)
+            except:
+                safe_print("Error saving session: {}".format(safe_str(e)))
     
     def load_session(self, session_id):
         """
@@ -93,11 +103,19 @@ class HistoryManager:
             return None
         
         try:
-            with open(filepath, 'r') as f:
-                return json.load(f)
+            # First try reading as utf-8 using io
+            import io
+            with io.open(filepath, 'r', encoding='utf-8') as f:
+                content = f.read()
+                return json.loads(content)
         except Exception as e:
-            print("Error loading session: {}".format(str(e)))
-            return None
+            try:
+                # Fallback to default open (for older files or system encoding)
+                with open(filepath, 'r') as f:
+                    return json.load(f)
+            except Exception as ex:
+                safe_print("Error loading session: {}".format(safe_str(ex)))
+                return None
     
     def list_sessions(self):
         """
@@ -127,7 +145,7 @@ class HistoryManager:
                         # Skip corrupted files
                         continue
         except Exception as e:
-            print("Error listing sessions: {}".format(str(e)))
+            safe_print("Error listing sessions: {}".format(safe_str(e)))
         
         # Sort by timestamp, newest first
         sessions.sort(key=lambda x: x['timestamp'], reverse=True)
@@ -151,7 +169,7 @@ class HistoryManager:
                 os.remove(filepath)
                 return True
             except Exception as e:
-                print("Error deleting session: {}".format(str(e)))
+                safe_print("Error deleting session: {}".format(safe_str(e)))
                 return False
         
         return False
@@ -181,6 +199,6 @@ class HistoryManager:
                     except:
                         continue
         except Exception as e:
-            print("Error clearing history: {}".format(str(e)))
+            safe_print("Error clearing history: {}".format(safe_str(e)))
             
         return count

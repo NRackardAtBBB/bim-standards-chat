@@ -1,10 +1,10 @@
-# BBB Standards Assistant - PyRevit Extension
+# Kodama - PyRevit Extension
 
 AI-powered Revit standards assistant using Notion RAG and Claude AI.
 
 ## Overview
 
-The BBB Standards Assistant is a PyRevit extension that provides an in-Revit chat interface to query BBB's Revit standards documentation stored in Notion. It uses Retrieval-Augmented Generation (RAG) with Claude AI to provide accurate, contextual answers with source citations.
+Kodama is a PyRevit extension that provides an in-Revit chat interface to query BBB's Revit standards documentation stored in Notion. It uses Retrieval-Augmented Generation (RAG) with Claude AI to provide accurate, contextual answers with source citations.
 
 ## Features
 
@@ -91,7 +91,7 @@ Response with Citations
 
 1. Go to https://www.notion.so/my-integrations
 2. Click "New Integration"
-3. Name it "BBB Standards Assistant"
+3. Name it "Kodama"
 4. Select the workspace
 5. Copy the "Internal Integration Token" (starts with `secret_`)
 6. Share your standards database with this integration

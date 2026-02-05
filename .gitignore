@@ -1,4 +1,4 @@
-# Git ignore file for BBB Standards Assistant
+# Git ignore file for Kodama
 
 # API Keys and sensitive configuration
 config/api_keys.json
