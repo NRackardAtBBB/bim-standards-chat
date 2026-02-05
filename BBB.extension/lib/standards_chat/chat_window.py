@@ -1112,8 +1112,6 @@ class StandardsChatWindow(Window):
 
         # Add the actual response
         self.add_message(text, is_user=False, sources=sources)
-        # Add the actual response
-        self.add_message(text, is_user=False, sources=sources)
     
     def update_typing_status(self, status):
         """Update the typing indicator status text"""
@@ -1122,7 +1120,7 @@ class StandardsChatWindow(Window):
                 lambda: setattr(self.typing_status_text, 'Text', status)
             )
     
-def _find_and_remove_typing_indicator(self):
+    def _find_and_remove_typing_indicator(self):
         """Find and remove the typing indicator from messages panel"""
         for child in self.messages_panel.Children:
             if hasattr(child, 'Name') and child.Name == "TypingIndicator":
@@ -1159,7 +1157,8 @@ def _find_and_remove_typing_indicator(self):
         # Store references
         self.streaming_textblock = textblock
         self.streaming_border = border
-self.streaming_text = u""
+        self.streaming_text = u""
+        
         # Scroll to bottom
         self.message_scrollviewer.ScrollToBottom()
     
@@ -1197,34 +1196,34 @@ self.streaming_text = u""
                 actions = parse_action_from_response(self.streaming_text)
                 
                 # Remove JSON blocks from the displayed text
-            import re
-            display_text = self.streaming_text
-            if actions:
-                # Remove all JSON code blocks
-                # Use unicode pattern to avoid encoding errors with input text
-                display_text = re.sub(u'```json\s*\{.*?\}\s*```', u'', display_text, flags=re.DOTALL)
-                # Clean up extra whitespace
-                display_text = re.sub(u'\n{3,}', u'\n\n', display_text)
-                display_text = display_text.strip()
-            
-            # Clear and reformat with markdown (WITHOUT the JSON)
-            self.streaming_textblock.Inlines.Clear()
-            self._add_formatted_text(self.streaming_textblock, display_text)
-            
-            # Add action buttons if enabled in settings
-            actions_enabled = self.config.get('features', 'enable_actions', default=True)
-            workflows_enabled = self.config.get('features', 'enable_workflows', default=True)
-            
-            if actions and self.action_executor and actions_enabled:
-                # Filter out workflows if they're disabled
-                if not workflows_enabled:
-                    actions = [a for a in actions if a.get('type') != 'workflow']
-                
+                import re
+                display_text = self.streaming_text
                 if actions:
-                    self._add_action_buttons(self.streaming_border, actions)
-            
-# Add subdued source links
-            self._add_sources_to_textblock(self.streaming_textblock, sources)
+                    # Remove all JSON code blocks
+                    # Use unicode pattern to avoid encoding errors with input text
+                    display_text = re.sub(u'```json\s*\{.*?\}\s*```', u'', display_text, flags=re.DOTALL)
+                    # Clean up extra whitespace
+                    display_text = re.sub(u'\n{3,}', u'\n\n', display_text)
+                    display_text = display_text.strip()
+                
+                # Clear and reformat with markdown (WITHOUT the JSON)
+                self.streaming_textblock.Inlines.Clear()
+                self._add_formatted_text(self.streaming_textblock, display_text)
+                
+                # Add action buttons if enabled in settings
+                actions_enabled = self.config.get('features', 'enable_actions', default=True)
+                workflows_enabled = self.config.get('features', 'enable_workflows', default=True)
+                
+                if actions and self.action_executor and actions_enabled:
+                    # Filter out workflows if they're disabled
+                    if not workflows_enabled:
+                        actions = [a for a in actions if a.get('type') != 'workflow']
+                    
+                    if actions:
+                        self._add_action_buttons(self.streaming_border, actions)
+                
+                # Add subdued source links
+                self._add_sources_to_textblock(self.streaming_textblock, sources)
             
             # Scroll to bottom
             self.message_scrollviewer.ScrollToBottom()
