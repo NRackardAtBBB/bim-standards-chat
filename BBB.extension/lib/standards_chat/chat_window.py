@@ -1201,7 +1201,7 @@ class StandardsChatWindow(Window):
                 if actions:
                     # Remove all JSON code blocks
                     # Use unicode pattern to avoid encoding errors with input text
-                    display_text = re.sub(u'```json\s*\{.*?\}\s*```', u'', display_text, flags=re.DOTALL)
+                    display_text = re.sub(u'```json\\s*\\{.*?\\}\\s*```', u'', display_text, flags=re.DOTALL)
                     # Clean up extra whitespace
                     display_text = re.sub(u'\n{3,}', u'\n\n', display_text)
                     display_text = display_text.strip()
@@ -1390,7 +1390,7 @@ class StandardsChatWindow(Window):
 
         # Add subdued source links
         if sources and not is_user:
-self._add_sources_to_textblock(textblock, sources)
+                        self._add_sources_to_textblock(textblock, sources)
         border.Child = textblock
 
         # Wrap with avatar and add to panel
@@ -1429,8 +1429,8 @@ self._add_sources_to_textblock(textblock, sources)
                     prefix = u"  \u2022 "
                     content = line.strip()[2:]
                 # Handle numbered lists
-                elif re.match(u'^\d+\.\s', line.strip()):
-                    match = re.match(u'^(\d+\.\s)(.*)', line.strip())
+                elif re.match(u'^\\d+\\.\\s', line.strip()):
+                    match = re.match(u'^(\\d+\\.\\s)(.*)', line.strip())
                     prefix = u"  " + match.group(1)
                     content = match.group(2)
                 
@@ -1440,12 +1440,12 @@ self._add_sources_to_textblock(textblock, sources)
                 try:
                     # Process inline formatting (Bold and Links)
                     # Regex for markdown links: [text](url)
-                    link_pattern = u'(\[[^\]]+\]\([^)]+\))'
+                    link_pattern = u'(\\[[^\\]]+\\]\\([^)]+\\))'
                     parts = re.split(link_pattern, content)
                 
                     for part in parts:
                         # Check if it's a markdown link
-                        link_match = re.match(u'\[([^\]]+)\]\(([^)]+)\)', part)
+                        link_match = re.match(u'\\[([^\\]]+)\\]\\(([^)]+)\\)', part)
                         if link_match:
                             link_text = link_match.group(1)
                             link_url = link_match.group(2)
@@ -1462,7 +1462,7 @@ self._add_sources_to_textblock(textblock, sources)
                         else:
                             # Check for raw URLs in the text part
                             # Regex for raw URLs: http://... or https://...
-                            url_pattern = u'(https?://[^\s]+)'
+                            url_pattern = u'(https?://[^\\s]+)'
                             sub_parts = re.split(url_pattern, part)
                             
                             for sub_part in sub_parts:
@@ -1480,7 +1480,7 @@ self._add_sources_to_textblock(textblock, sources)
                                 else:
                                     # Process bold in non-link text
                                     if u'**' in sub_part:
-                                        bold_parts = re.split(u'(\*\*.*?\*\*)', sub_part)
+                                        bold_parts = re.split(u'(\\*\\*.*?\\*\\*)', sub_part)
                                         for bold_part in bold_parts:
                                             if bold_part.startswith(u'**') and bold_part.endswith(u'**'):
                                                 run = Run(bold_part[2:-2])
