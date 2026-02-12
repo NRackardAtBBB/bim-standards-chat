@@ -43,14 +43,86 @@ def safe_str(obj):
             return u"<unprintable object>"
 
 def safe_print(msg):
-    """Safely print to stdout, handling encoding for IronPython console."""
+    """Safely print to stdout, handling encoding for IronPython console.
+
+    Silently fails if the output stream is unavailable (e.g. pyRevit output
+    window disposed) to prevent crashing Revit from background threads.
+    """
     try:
         if not isinstance(msg, unicode):
             msg = safe_str(msg)
         # Encode to ascii with replacement to be absolutely safe in Revit console
         print(msg.encode('ascii', 'replace'))
     except Exception:
-        print("<failed to print message>")
+        # Do NOT call print() here - if the output stream's COM object is disposed,
+        # any print() will throw InvalidComObjectException and crash Revit
+        pass
+
+def ascii_safe(text):
+    """Convert unicode text to ASCII-safe unicode string, replacing problematic characters.
+    
+    Args:
+        text: Unicode string that may contain non-ASCII characters
+        
+    Returns:
+        Unicode string with all non-ASCII characters replaced with ASCII equivalents
+    """
+    if not isinstance(text, unicode):
+        text = safe_str(text)
+    
+    # Build result character by character
+    result = []
+    for char in text:
+        code = ord(char)
+        if code < 128:
+            # ASCII character - keep as is
+            result.append(char)
+        else:
+            # Non-ASCII character - replace with ASCII equivalent or placeholder
+            if code == 0x2026:  # ellipsis
+                result.append('...')
+            elif code == 0x2013:  # en dash
+                result.append('-')
+            elif code == 0x2014:  # em dash
+                result.append('--')
+            elif code == 0x2018 or code == 0x2019:  # smart single quotes
+                result.append("'")
+            elif code == 0x201C or code == 0x201D:  # smart double quotes
+                result.append('"')
+            elif code == 0x2022:  # bullet
+                result.append('*')
+            elif code == 0x00A0:  # non-breaking space
+                result.append(' ')
+            elif code == 0x00B0:  # degree symbol
+                result.append('deg')
+            elif code >= 0x0080 and code <= 0x00FF:  # Latin-1 supplement
+                # Try to approximate common Latin-1 chars
+                result.append('?')
+            else:
+                # Unknown non-ASCII character - use placeholder
+                result.append('?')
+    
+    return u''.join(result)
+
+def safe_str_ascii(obj):
+    """Safely convert any object to an ASCII-safe unicode string.
+    
+    This combines safe_str and ascii_safe to guarantee ASCII-compatible output.
+    Use this for error messages and any text that will be displayed or encoded.
+    
+    Args:
+        obj: Any object to convert
+        
+    Returns:
+        ASCII-safe unicode string
+    """
+    try:
+        # First convert to unicode
+        text = safe_str(obj)
+        # Then make it ASCII-safe
+        return ascii_safe(text)
+    except Exception:
+        return u"[Error converting to string]"
 
 try:
     from Autodesk.Revit.DB import *

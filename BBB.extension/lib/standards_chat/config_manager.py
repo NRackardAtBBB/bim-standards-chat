@@ -17,10 +17,58 @@ class ConfigManager:
         self.extension_dir = self._get_extension_dir()
         self.config_dir = os.path.join(self.extension_dir, 'config')
         
+        # User preferences path (LocalLow)
+        self.user_data_dir = os.path.join(os.path.expanduser('~'), 'AppData', 'LocalLow', 'BBB', 'Kodama')
+        self.user_prefs_path = os.path.join(self.user_data_dir, 'user_preferences.json')
+
         # Load configuration files
         self.config = self._load_json('config.json')
         self.api_keys = self._load_json('api_keys.json')
-    
+
+        # Load and merge user preferences
+        self._load_and_merge_user_prefs()
+
+    def _load_and_merge_user_prefs(self):
+        """Load user preferences from AppData and merge into config"""
+        user_prefs = {}
+        if os.path.exists(self.user_prefs_path):
+            f = None
+            try:
+                f = open(self.user_prefs_path, 'r')
+                user_prefs = json.load(f)
+            except Exception:
+                pass
+            finally:
+                if f:
+                    try:
+                        f.close()
+                    except:
+                        pass
+        
+        self.config['user'] = user_prefs
+
+    def _save_user_prefs(self, user_prefs):
+        """Save user preferences to AppData"""
+        # Create directory only when actually saving
+        if not os.path.exists(self.user_data_dir):
+            try:
+                os.makedirs(self.user_data_dir)
+            except OSError:
+                pass
+        
+        f = None
+        try:
+            f = open(self.user_prefs_path, 'w')
+            json.dump(user_prefs, f, indent=2)
+        except Exception:
+            pass
+        finally:
+            if f:
+                try:
+                    f.close()
+                except:
+                    pass
+
     def _get_extension_dir(self):
         """Get the extension directory path"""
         # Navigate up from lib/standards_chat to extension root
@@ -38,8 +86,16 @@ class ConfigManager:
                 "Configuration file not found: {}".format(filepath)
             )
         
-        with open(filepath, 'r') as f:
+        f = None
+        try:
+            f = open(filepath, 'r')
             return json.load(f)
+        finally:
+            if f:
+                try:
+                    f.close()
+                except:
+                    pass
     
     def get(self, section, key, default=None):
         """Get configuration value"""
@@ -90,11 +146,46 @@ class ConfigManager:
         config[keys[-1]] = value
     
     def save(self):
-        """Save current configuration to config.json"""
+        """
+        Save current configuration.
+        Splits 'user' settings to AppData and the rest to config.json.
+        """
+        # 1. Save User Prefs
+        if 'user' in self.config:
+            self._save_user_prefs(self.config['user'])
+
+        # 2. Save Central Config
+        # Create a copy without the user section to avoid writing it back to central
+        config_to_save = self.config.copy()
+        if 'user' in config_to_save:
+            del config_to_save['user']
+
         filepath = os.path.join(self.config_dir, 'config.json')
-        with open(filepath, 'w') as f:
-            json.dump(self.config, f, indent=2)
-    
+        f = None
+        try:
+            f = open(filepath, 'w')
+            json.dump(config_to_save, f, indent=2)
+        finally:
+            if f:
+                try:
+                    f.close()
+                except:
+                    pass
+
+    def save_api_keys(self):
+        """Save API keys to api_keys.json"""
+        filepath = os.path.join(self.config_dir, 'api_keys.json')
+        f = None
+        try:
+            f = open(filepath, 'w')
+            json.dump(self.api_keys, f, indent=2)
+        finally:
+            if f:
+                try:
+                    f.close()
+                except:
+                    pass
+
     def get_api_key(self, service):
         """Get API key for a service"""
         key_name = "{}_api_key".format(service)

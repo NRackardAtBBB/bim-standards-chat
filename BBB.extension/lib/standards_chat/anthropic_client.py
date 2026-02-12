@@ -25,7 +25,8 @@ class AnthropicClient:
         self.model = config.get('anthropic', 'model')
         self.max_tokens = config.get('anthropic', 'max_tokens')
         self.temperature = config.get('anthropic', 'temperature')
-        self.system_prompt = config.get('anthropic', 'system_prompt')
+        from standards_chat.utils import ascii_safe
+        self.system_prompt = ascii_safe(config.get('anthropic', 'system_prompt'))
         self.base_url = "https://api.anthropic.com/v1"
         
         # Create HTTP client
@@ -96,8 +97,8 @@ class AnthropicClient:
                 "messages": messages,
                 "temperature": 0.5
             }
-            
-            json_content = json.dumps(request_body)
+
+            json_content = json.dumps(request_body, ensure_ascii=True)
             content = System.Net.Http.StringContent(
                 json_content,
                 Encoding.UTF8,
@@ -170,8 +171,8 @@ Return ONLY the keywords separated by spaces. Do not include any other text.""".
                 "messages": messages,
                 "temperature": 0
             }
-            
-            json_content = json.dumps(request_body)
+
+            json_content = json.dumps(request_body, ensure_ascii=True)
             content = System.Net.Http.StringContent(
                 json_content,
                 Encoding.UTF8,
@@ -241,7 +242,12 @@ Return ONLY the keywords separated by spaces. Do not include any other text.""".
             full_text = stream_result
             input_tokens = 0
             output_tokens = 0
-        
+
+        # Sanitize response text to pure ASCII before any processing
+        # Prevents UnicodeEncodeError when regex or other operations encounter non-ASCII chars
+        from standards_chat.utils import ascii_safe
+        full_text = ascii_safe(full_text)
+
         # Extract citations from the response
         cited_indices = self._extract_citations(full_text)
         
@@ -347,57 +353,60 @@ Return ONLY the keywords separated by spaces. Do not include any other text.""".
         """
         import re
         # Find all [number] patterns in the text
-        citations = re.findall(r'\[(\d+)\]', text)
+        citations = re.findall(u'\\[(\\d+)\\]', text)
         # Convert to integers and return as set
         return set(int(c) for c in citations)
     
     def _build_context(self, notion_pages, revit_context):
         """Build context string from Notion pages and Revit info"""
+        from standards_chat.utils import ascii_safe
         context_parts = []
-        
+
         # Add Notion standards
         if notion_pages:
-            context_parts.append("# Relevant BBB Standards\n")
+            context_parts.append(u"# Relevant BBB Standards\n")
             for i, page in enumerate(notion_pages, 1):
                 context_parts.append(
-                    "## Standard {}: {}\n".format(i, page['title'])
+                    u"## Standard {}: {}\n".format(i, ascii_safe(page['title']))
                 )
                 context_parts.append(
-                    "Source: {}\n".format(page['url'])
+                    u"Source: {}\n".format(ascii_safe(page['url']))
                 )
                 if page.get('category'):
                     context_parts.append(
-                        "Category: {}\n".format(page['category'])
+                        u"Category: {}\n".format(ascii_safe(page['category']))
                     )
-                context_parts.append("\n{}\n\n".format(page['content']))
-        
+                context_parts.append(u"\n{}\n\n".format(ascii_safe(page['content'])))
+
         # Add Revit context if available
         if revit_context:
-            context_parts.append("\n# Current Revit Context\n")
+            context_parts.append(u"\n# Current Revit Context\n")
             for key, value in revit_context.items():
-                context_parts.append("- {}: {}\n".format(key, value))
-        
-        return ''.join(context_parts)
+                context_parts.append(u"- {}: {}\n".format(ascii_safe(key), ascii_safe(value)))
+
+        return u''.join(context_parts)
     
     def _build_messages(self, user_query, context, conversation_history, screenshot_base64=None):
         """Build messages array for API call"""
+        from standards_chat.utils import ascii_safe
         messages = []
-        
+
         # Add conversation history if present (last 3 exchanges)
         if conversation_history:
             recent_history = conversation_history[-3:]
             for exchange in recent_history:
                 messages.append({
                     "role": "user",
-                    "content": exchange['user']
+                    "content": ascii_safe(exchange['user'])
                 })
                 messages.append({
                     "role": "assistant",
-                    "content": exchange['assistant']
+                    "content": ascii_safe(exchange['assistant'])
                 })
-        
+
         # Build current user message with context
-        text_content = """{}
+        # context is already ascii_safe from _build_context
+        text_content = u"""{}
 
 User Question: {}
 
@@ -408,7 +417,7 @@ Only cite sources that you actually reference in your answer.
 If multiple standards are relevant, explain how they work together.
 If the standards don't fully address the question, acknowledge this and provide your best guidance.""".format(
             context,
-            user_query
+            ascii_safe(user_query)
         )
         
         # If screenshot provided, use multi-modal content format
@@ -452,14 +461,14 @@ If the standards don't fully address the question, acknowledge this and provide 
             "system": system_prompt,
             "messages": messages
         }
-        
+
         request = HttpRequestMessage(HttpMethod.Post, url)
         request.Content = System.Net.Http.StringContent(
-            json.dumps(payload),
+            json.dumps(payload, ensure_ascii=True),
             Encoding.UTF8,
             "application/json"
         )
-        
+
         response = self.client.SendAsync(request).Result
         
         # Check for errors
@@ -497,14 +506,14 @@ If the standards don't fully address the question, acknowledge this and provide 
             "messages": messages,
             "stream": True
         }
-        
+
         request = HttpRequestMessage(HttpMethod.Post, url)
         request.Content = System.Net.Http.StringContent(
-            json.dumps(payload),
+            json.dumps(payload, ensure_ascii=True),
             Encoding.UTF8,
             "application/json"
         )
-        
+
         response = self.client.SendAsync(request, System.Net.Http.HttpCompletionOption.ResponseHeadersRead).Result
         
         # Check for errors
@@ -546,20 +555,22 @@ If the standards don't fully address the question, acknowledge this and provide 
                     delta = event_data.get('delta', {})
                     if delta.get('type') == 'text_delta':
                         text_chunk = delta.get('text', '')
-                        safe_print(u"DEBUG: Received text_chunk from API, type: {}".format(type(text_chunk).__name__))
-                        
-                        # Ensure text_chunk is unicode
+
+                        # Ensure text_chunk is unicode and ASCII-safe
                         if not isinstance(text_chunk, unicode):
                             if isinstance(text_chunk, str):
                                 text_chunk = text_chunk.decode('utf-8')
                             else:
                                 text_chunk = unicode(text_chunk)
-                        
+                        # Sanitize to ASCII immediately to prevent encoding
+                        # errors downstream in IronPython
+                        from standards_chat.utils import ascii_safe
+                        text_chunk = ascii_safe(text_chunk)
+
                         full_text += text_chunk
 
                         # Call callback with chunk
                         if callback:
-                            safe_print(u"DEBUG: Calling callback with chunk")
                             callback(text_chunk)
 
                 # Capture usage if the API includes it in a final metadata/event payload

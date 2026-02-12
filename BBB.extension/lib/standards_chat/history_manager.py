@@ -72,20 +72,33 @@ class HistoryManager:
         
         filepath = os.path.join(self.history_dir, '{}.json'.format(session_id))
         
+        f = None
         try:
             import io
             # Use io.open for consistent unicode handling in Python 2 (IronPython)
-            with io.open(filepath, 'w', encoding='utf-8') as f:
-                # ensure_ascii=True forces ascii, which is safest for avoiding codec errors
-                json_str = json.dumps(session_data, indent=2, ensure_ascii=True)
-                f.write(unicode(json_str)) # Write the ascii-escaped unicode string
+            f = io.open(filepath, 'w', encoding='utf-8')
+            # ensure_ascii=True forces ascii, which is safest for avoiding codec errors
+            json_str = json.dumps(session_data, indent=2, ensure_ascii=True)
+            f.write(unicode(json_str)) # Write the ascii-escaped unicode string
         except Exception as e:
             # Fallback
+            if f:
+                try:
+                    f.close()
+                except:
+                    pass
+                f = None
             try:
-                with open(filepath, 'w') as f:
-                     json.dump(session_data, f, indent=2, ensure_ascii=True)
+                f = open(filepath, 'w')
+                json.dump(session_data, f, indent=2, ensure_ascii=True)
             except:
                 safe_print("Error saving session: {}".format(safe_str(e)))
+        finally:
+            if f:
+                try:
+                    f.close()
+                except:
+                    pass
     
     def load_session(self, session_id):
         """
@@ -102,20 +115,34 @@ class HistoryManager:
         if not os.path.exists(filepath):
             return None
         
+        f = None
         try:
             # First try reading as utf-8 using io
             import io
-            with io.open(filepath, 'r', encoding='utf-8') as f:
-                content = f.read()
-                return json.loads(content)
+            f = io.open(filepath, 'r', encoding='utf-8')
+            content = f.read()
+            return json.loads(content)
         except Exception as e:
+            if f:
+                try:
+                    f.close()
+                except:
+                    pass
+                f = None
             try:
                 # Fallback to default open (for older files or system encoding)
-                with open(filepath, 'r') as f:
-                    return json.load(f)
+                f = open(filepath, 'r')
+                result = json.load(f)
+                return result
             except Exception as ex:
                 safe_print("Error loading session: {}".format(safe_str(ex)))
                 return None
+        finally:
+            if f:
+                try:
+                    f.close()
+                except:
+                    pass
     
     def list_sessions(self):
         """
@@ -133,17 +160,24 @@ class HistoryManager:
             for filename in os.listdir(self.history_dir):
                 if filename.endswith('.json'):
                     filepath = os.path.join(self.history_dir, filename)
+                    f = None
                     try:
-                        with open(filepath, 'r') as f:
-                            data = json.load(f)
-                            sessions.append({
-                                'session_id': data.get('session_id', filename[:-5]),
-                                'title': data.get('title', 'Untitled Chat'),
-                                'timestamp': data.get('timestamp', '')
-                            })
+                        f = open(filepath, 'r')
+                        data = json.load(f)
+                        sessions.append({
+                            'session_id': data.get('session_id', filename[:-5]),
+                            'title': data.get('title', 'Untitled Chat'),
+                            'timestamp': data.get('timestamp', '')
+                        })
                     except:
                         # Skip corrupted files
                         continue
+                    finally:
+                        if f:
+                            try:
+                                f.close()
+                            except:
+                                pass
         except Exception as e:
             safe_print("Error listing sessions: {}".format(safe_str(e)))
         

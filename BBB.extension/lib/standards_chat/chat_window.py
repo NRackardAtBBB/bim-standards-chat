@@ -5,6 +5,7 @@ Manages the WPF window, user interactions, and coordinates API calls
 """
 
 import clr
+import random
 clr.AddReference('PresentationFramework')
 clr.AddReference('PresentationCore')
 clr.AddReference('WindowsBase')
@@ -27,7 +28,6 @@ import os
 import sys
 import time
 import json
-import random
 
 # Add lib path
 script_dir = os.path.dirname(__file__)
@@ -97,20 +97,32 @@ class StandardsChatWindow(Window):
         # Cache bot icon bitmap for avatars
         self._bot_icon_bitmap = None
         try:
-            script_dir_init = os.path.dirname(__file__)
-            lib_dir_init = os.path.dirname(script_dir_init)
-            extension_dir_init = os.path.dirname(lib_dir_init)
-            bot_icon_path = os.path.join(
-                extension_dir_init, 'Chat.tab', 'Kodama.panel',
-                'Kodama.pushbutton', 'icon.png'
-            )
-            if os.path.exists(bot_icon_path):
+            # Check for overridden avatar in avatars folder first
+            script_dir = os.path.dirname(__file__)
+            lib_dir = os.path.dirname(script_dir)
+            custom_bot_icon = os.path.join(lib_dir, 'ui', 'avatars', 'Kodama.png')
+            
+            if os.path.exists(custom_bot_icon):
                 bmp = BitmapImage()
                 bmp.BeginInit()
-                bmp.UriSource = Uri("file:///" + bot_icon_path.replace("\\", "/"))
+                bmp.UriSource = Uri("file:///" + custom_bot_icon.replace("\\", "/"))
                 bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad
                 bmp.EndInit()
                 self._bot_icon_bitmap = bmp
+            else:
+                # Fallback to extension icon
+                extension_dir_init = os.path.dirname(lib_dir)
+                bot_icon_path = os.path.join(
+                    extension_dir_init, 'Chat.tab', 'Kodama.panel',
+                    'Kodama.pushbutton', 'icon.png'
+                )
+                if os.path.exists(bot_icon_path):
+                    bmp = BitmapImage()
+                    bmp.BeginInit()
+                    bmp.UriSource = Uri("file:///" + bot_icon_path.replace("\\", "/"))
+                    bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad
+                    bmp.EndInit()
+                    self._bot_icon_bitmap = bmp
         except:
             pass
 
@@ -141,7 +153,7 @@ class StandardsChatWindow(Window):
             "Looking very busy and important...",
             "This is taking longer than expected...",
             "Adding suspense for dramatic effect...",
-            "Taking my sweet time (jk)...",
+            "Taking my sweet time...",
             "Running in circles (efficiently)..."
         ]
         self.current_message_index = 0
@@ -206,14 +218,23 @@ class StandardsChatWindow(Window):
             try:
                 index_path = os.path.join(self.config.config_dir, 'sharepoint_index.json')
                 if os.path.exists(index_path):
-                    with open(index_path, 'r') as f:
+                    f = None
+                    try:
+                        f = open(index_path, 'r')
                         self.sharepoint_index = json.load(f)
+                    finally:
+                        if f:
+                            try:
+                                f.close()
+                            except:
+                                pass
             except Exception as e:
                 safe_print("Error loading SharePoint index: {}".format(safe_str(e)))
             
         except Exception as e:
-            # Show error in status
-            self.status_text.Text = "Configuration Error: {}".format(safe_str(e))
+            # Show error in status - use ASCII-safe conversion
+            from standards_chat.utils import safe_str_ascii
+            self.status_text.Text = "Configuration Error: {}".format(safe_str_ascii(e))
             self.send_button.IsEnabled = False
             return
         
@@ -236,6 +257,9 @@ class StandardsChatWindow(Window):
         self.history_listbox.SelectionChanged += self.on_history_selection_changed
         if self.header_icon_button:
             self.header_icon_button.Click += self.on_header_icon_click
+            
+        # Cleanup on close
+        self.Closed += self.on_closed
         
         # Load chat history into sidebar
         self.Loaded += self.on_window_loaded
@@ -243,6 +267,43 @@ class StandardsChatWindow(Window):
         # Focus input box
         self.Loaded += lambda s, e: self.input_textbox.Focus()
     
+    def Close(self):
+        """Override Close to handle cross-thread calls from pyRevit reload."""
+        try:
+            if self.Dispatcher.CheckAccess():
+                # We're on the UI thread - close normally
+                Window.Close(self)
+            else:
+                # Called from a different thread (e.g. pyRevit reload)
+                # Dispatch to the UI thread
+                self.Dispatcher.Invoke(lambda: Window.Close(self))
+        except Exception:
+            # Window may already be closed or disposed - ignore
+            pass
+
+    def on_closed(self, sender, args):
+        """Handle cleanup when window closes"""
+        try:
+            # Stop any timers
+            if hasattr(self, 'typing_timer') and self.typing_timer:
+                self.typing_timer.Stop()
+                self.typing_timer = None
+            
+            # Clear references to help GC
+            self.config = None
+            self.standards_client = None
+            self.anthropic = None
+            self.vector_db_client = None
+            self.usage_logger = None
+            self.action_executor = None
+            self.history_manager = None
+            
+            # Force garbage collection in IronPython
+            import gc
+            gc.collect()
+        except:
+            pass
+
     def on_header_icon_click(self, sender, args):
         """Open the standards website"""
         try:
@@ -259,26 +320,33 @@ class StandardsChatWindow(Window):
             # Find the icon path - go up from lib/standards_chat to BBB.extension root
             script_dir = os.path.dirname(__file__)  # lib/standards_chat
             lib_dir = os.path.dirname(script_dir)  # lib
-            extension_dir = os.path.dirname(lib_dir)  # BBB.extension
             
-            icon_path = os.path.join(
-                extension_dir,
-                'Chat.tab',
-                'Kodama.panel',
-                'Kodama.pushbutton',
-                'icon.png'
-            )
+            # 1. Try Custom Kodama Avatar from avatars folder
+            avatar_icon_path = os.path.join(lib_dir, 'ui', 'avatars', 'Kodama.png')
             
+            final_icon_path = None
+            if os.path.exists(avatar_icon_path):
+                final_icon_path = avatar_icon_path
+            else:
+                # 2. Fallback to extension icon
+                extension_dir = os.path.dirname(lib_dir)  # BBB.extension
+                final_icon_path = os.path.join(
+                    extension_dir,
+                    'Chat.tab',
+                    'Kodama.panel',
+                    'Kodama.pushbutton',
+                    'icon.png'
+                )
             
-            if os.path.exists(icon_path):
+            if final_icon_path and os.path.exists(final_icon_path):
                 bitmap = BitmapImage()
                 bitmap.BeginInit()
-                bitmap.UriSource = Uri("file:///" + icon_path.replace("\\", "/"))
+                bitmap.UriSource = Uri("file:///" + final_icon_path.replace("\\", "/"))
                 bitmap.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad
                 bitmap.EndInit()
                 self.header_icon.Source = bitmap
             else:
-                safe_print("Icon file not found at: {}".format(safe_str(icon_path)))
+                safe_print("Icon file not found at: {}".format(safe_str(final_icon_path)))
         except Exception as e:
             # Print error for debugging
             safe_print("Could not load header icon: {}".format(safe_str(e)))
@@ -301,14 +369,36 @@ class StandardsChatWindow(Window):
 
         return ''
 
+    def _open_settings(self, sender, args):
+        """Open settings window"""
+        try:
+            from standards_chat.settings_window import SettingsWindow
+            settings = SettingsWindow(self.config.config_dir)
+            settings.ShowDialog()
+            
+            # Reload config to get new values
+            self.config = ConfigManager()
+        except Exception as e:
+            safe_print("Error opening settings: {}".format(str(e)))
+
     def _add_welcome_message(self):
         """Add a dynamic welcome message with suggested prompts"""
         import random
         from System.Windows.Markup import XamlReader
+        # Removed InlineUIContainer as it causes crashes in some contexts
+        # from System.Windows.Documents import InlineUIContainer 
 
-        name = self._get_user_display_name()
-        name_part = " " + name if name else ""
-
+        # Check if we are using a configured name or fallback
+        config_name = None
+        try:
+            config_name = self.config.get('user', 'name', '')
+        except:
+            pass
+            
+        display_name = self._get_user_display_name()
+        is_default_name = not config_name and display_name # True if using fallback and not manually set
+        
+        # Templates
         greetings = [
             "Hey{}, what can I help you with today?",
             "Hi{}, got a Revit question?",
@@ -317,7 +407,10 @@ class StandardsChatWindow(Window):
             "Hi{}, ready to help with your Revit standards questions.",
         ]
 
-        greeting = random.choice(greetings).format(name_part)
+        chosen_template = random.choice(greetings)
+        parts = chosen_template.split('{}')
+        prefix = parts[0]
+        suffix = parts[1] if len(parts) > 1 else ""
 
         # Build the welcome bubble
         border = Border()
@@ -331,9 +424,35 @@ class StandardsChatWindow(Window):
         tb.Foreground = self.FindResource("TextPrimaryColor")
         tb.LineHeight = 20
 
-        greeting_run = Run(greeting)
-        greeting_run.FontWeight = System.Windows.FontWeights.SemiBold
-        tb.Inlines.Add(greeting_run)
+        # Add prefix
+        prefix_run = Run(prefix)
+        prefix_run.FontWeight = System.Windows.FontWeights.SemiBold
+        tb.Inlines.Add(prefix_run)
+        
+        # Add formatted name
+        if display_name:
+            name_text = " " + display_name
+            if is_default_name:
+                link = Hyperlink()
+                link.Click += self._open_settings
+                link.ToolTip = "Click here to change how I address you"
+                link.TextDecorations = System.Windows.TextDecorations.Underline
+                link.Foreground = self.FindResource("TextPrimaryColor") 
+                
+                name_run = Run(name_text)
+                name_run.FontWeight = System.Windows.FontWeights.SemiBold
+                link.Inlines.Add(name_run)
+                
+                tb.Inlines.Add(link)
+            else:
+                name_run = Run(name_text)
+                name_run.FontWeight = System.Windows.FontWeights.SemiBold
+                tb.Inlines.Add(name_run)
+        
+        # Add suffix
+        suffix_run = Run(suffix)
+        suffix_run.FontWeight = System.Windows.FontWeights.SemiBold
+        tb.Inlines.Add(suffix_run)
 
         stack.Children.Add(tb)
 
@@ -346,6 +465,9 @@ class StandardsChatWindow(Window):
                     "How should I set up worksets?",
                     "What are the standard line weights?"
                 ]
+            elif len(prompts) > 3:
+                # Randomly select 3 prompts if we have more than 3
+                prompts = random.sample(prompts, 3)
         except:
             prompts = [
                 "What are the naming conventions for views?",
@@ -381,46 +503,94 @@ class StandardsChatWindow(Window):
         """Handle suggested prompt chip click"""
         prompt_text = sender.Tag
         if prompt_text:
+            # Hide the suggestions panel (parent of the button)
+            try:
+                from System.Windows import Visibility
+                if sender.Parent:
+                    sender.Parent.Visibility = Visibility.Collapsed
+            except:
+                pass
+                
             self.input_textbox.Text = prompt_text
             self.send_message()
 
     def _create_bot_avatar(self):
         """Create a small Kodama bot avatar element"""
         avatar_border = Border()
-        avatar_border.Width = 24
-        avatar_border.Height = 24
-        avatar_border.CornerRadius = System.Windows.CornerRadius(12)
+        avatar_border.Width = 32
+        avatar_border.Height = 32
+        avatar_border.CornerRadius = System.Windows.CornerRadius(16)
         avatar_border.Background = SolidColorBrush(Color.FromRgb(215, 235, 255)) # slightly stronger blue
         avatar_border.VerticalAlignment = System.Windows.VerticalAlignment.Top
         avatar_border.Margin = Thickness(0, 5, 8, 0)
 
         if self._bot_icon_bitmap:
-            img = Image()
-            img.Source = self._bot_icon_bitmap
-            img.Width = 16
-            img.Height = 16
-            img.HorizontalAlignment = HorizontalAlignment.Center
-            img.VerticalAlignment = System.Windows.VerticalAlignment.Center
-            avatar_border.Child = img
-
+            from System.Windows.Media import ImageBrush, Stretch
+            brush = ImageBrush(self._bot_icon_bitmap)
+            brush.Stretch = Stretch.UniformToFill
+            avatar_border.Background = brush
+        
         return avatar_border
 
     def _create_user_avatar(self):
-        """Create a user initials avatar element"""
+        """Create a user avatar element"""
         avatar_border = Border()
-        avatar_border.Width = 24
-        avatar_border.Height = 24
-        avatar_border.CornerRadius = System.Windows.CornerRadius(12)
+        avatar_border.Width = 32
+        avatar_border.Height = 32
+        avatar_border.CornerRadius = System.Windows.CornerRadius(16)
         avatar_border.Background = SolidColorBrush(Color.FromRgb(0x00, 0x78, 0xD4))
         avatar_border.VerticalAlignment = System.Windows.VerticalAlignment.Top
         avatar_border.Margin = Thickness(8, 5, 0, 0)
+
+        # Enable interaction
+        avatar_border.ToolTip = "Change my Avatar"
+        try:
+            avatar_border.Cursor = System.Windows.Input.Cursors.Hand
+        except:
+            # Fallback if cursor access fails
+            pass
+        avatar_border.MouseLeftButtonUp += self._open_settings
+
+        # Check for configured avatar
+        avatar_file = self.config.get('user', 'avatar', None)
+        if avatar_file:
+            try:
+                # Need to construct path to avatars folder
+                # We can't use __file__ reliably in all contexts, but assuming standard structure
+                import os
+                
+                # Try to find lib/ui/avatars
+                # Chat window is in lib/standards_chat
+                # So we go up two levels to lib, then down to ui/avatars
+                
+                # Use current directory of module if possible
+                module_dir = os.path.dirname(os.path.abspath(__file__)) 
+                lib_dir = os.path.dirname(module_dir)
+                avatar_path = os.path.join(lib_dir, 'ui', 'avatars', avatar_file)
+                
+                if os.path.exists(avatar_path):
+                    bitmap = BitmapImage()
+                    bitmap.BeginInit()
+                    bitmap.UriSource = Uri("file:///" + avatar_path.replace("\\", "/"))
+                    bitmap.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad
+                    bitmap.EndInit()
+                    
+                    from System.Windows.Media import ImageBrush, Stretch
+                    brush = ImageBrush(bitmap)
+                    brush.Stretch = Stretch.UniformToFill
+                    avatar_border.Background = brush
+                    return avatar_border
+            except Exception as e:
+                # Fallback to initials if image load fails
+                safe_print("Error loading avatar: " + safe_str(e))
+                pass
 
         name = self._get_user_display_name()
         initial = name[0].upper() if name else "U"
 
         initials_text = TextBlock()
         initials_text.Text = initial
-        initials_text.FontSize = 11
+        initials_text.FontSize = 14 # Increased from 11
         initials_text.FontWeight = System.Windows.FontWeights.SemiBold
         initials_text.Foreground = Brushes.White
         initials_text.HorizontalAlignment = HorizontalAlignment.Center
@@ -431,7 +601,7 @@ class StandardsChatWindow(Window):
 
     def _wrap_with_avatar(self, bubble, is_user):
         """Wrap a message bubble in a Grid with an avatar"""
-        from System.Windows.Controls import Grid, ColumnDefinition
+        from System.Windows.Controls import Grid, ColumnDefinition, StackPanel
         from System.Windows import GridLength, GridUnitType
 
         container = Grid()
@@ -455,7 +625,10 @@ class StandardsChatWindow(Window):
             container.Children.Add(bubble)
             container.Children.Add(avatar)
         else:
-            # Assistant: [avatar] [bubble/content]
+            # Assistant: [avatar] [bubble_stack]
+            # We use a stack here to allow appending the sources panel easily below the bubble
+            # while keeping alignment with the avatar
+            
             col1 = ColumnDefinition()
             col1.Width = GridLength.Auto
             col2 = ColumnDefinition()
@@ -466,29 +639,36 @@ class StandardsChatWindow(Window):
             avatar = self._create_bot_avatar()
             Grid.SetColumn(avatar, 0)
             
-            # Align content to left but allow it to stretch if needed?
-            # Actually for bubble we usually want it HorizontalAlignment.Left
+            # Create a stack for the bubble + potential sources
+            bubble_stack = StackPanel()
             if hasattr(bubble, 'HorizontalAlignment'):
                 bubble.HorizontalAlignment = HorizontalAlignment.Left
                 
-            Grid.SetColumn(bubble, 1)
+            bubble_stack.Children.Add(bubble)
+            
+            # If we are in add_message and sources were provided (i.e. loading from history)
+            # We need to render them here. 
+            # Note: add_message calls this method. But this method doesn't take sources.
+            # We can rely on add_message to modify this stack if needed, OR
+            # Just return the container and let caller add to children?
+            # But the caller (add_message) adds 'bubble' as child. 'bubble' is now child of 'bubble_stack'.
+            # This logic change requires update in add_message too?
+            # No, 'bubble' passed in IS the bubble border.
+            
+            Grid.SetColumn(bubble_stack, 1)
             container.Children.Add(avatar)
-            container.Children.Add(bubble)
+            container.Children.Add(bubble_stack)
 
         return container
 
     def _create_sources_panel(self, sources):
-        """Create a separate panel for sources (displayed below bubble)"""
+        """Create a separate panel for sources (displayed below bubble as footnotes)"""
         if not sources:
             return None
             
-        from System.Windows.Controls import StackPanel, WrapPanel
-        
-        panel = WrapPanel() 
-        panel.Orientation = Orientation.Horizontal
-        panel.Margin = Thickness(12, 4, 0, 8) # Indent slightly from bubble left
-        
-        grey_brush = SolidColorBrush(Color.FromRgb(0x60, 0x5E, 0x5C))
+        from System.Windows.Controls import StackPanel, Image
+        from System.Windows.Documents import Run, Hyperlink, InlineUIContainer
+        from System.Windows.Media.Imaging import BitmapImage
         
         # Try to load SharePoint icon
         sp_icon_bitmap = None
@@ -504,48 +684,74 @@ class StandardsChatWindow(Window):
                 sp_icon_bitmap.EndInit()
         except:
             pass
+        
+        panel = StackPanel() 
+        panel.Orientation = Orientation.Vertical
+        panel.Margin = Thickness(12, 8, 12, 8) 
+        
+        # Divider line
+        divider = Border()
+        divider.Height = 1
+        divider.Background = SolidColorBrush(Color.FromRgb(0xE0, 0xE0, 0xE0))
+        divider.Margin = Thickness(0, 0, 0, 8)
+        divider.HorizontalAlignment = HorizontalAlignment.Left
+        divider.Width = 200
+        panel.Children.Add(divider)
+        
+        grey_brush = SolidColorBrush(Color.FromRgb(0x60, 0x5E, 0x5C))
 
-        for source in sources:
-            # Create a pill/chip for each source
-            source_border = Border()
-            source_border.Background = SolidColorBrush(Color.FromRgb(0xF3, 0xF2, 0xF1))
-            source_border.CornerRadius = System.Windows.CornerRadius(12)
-            source_border.Padding = Thickness(8, 4, 8, 4)
-            source_border.Margin = Thickness(0, 0, 8, 4)
+        for i, source in enumerate(sources, 1):
+            # Create footnote item: "[1] Title"
+            tb = TextBlock()
+            tb.FontSize = 11
+            tb.Margin = Thickness(0, 2, 0, 2)
+            tb.TextWrapping = TextWrapping.Wrap
             
-            # Content stack for the chip
-            chip_stack = StackPanel()
-            chip_stack.Orientation = Orientation.Horizontal
+            # Number [n]
+            num_run = Run("[{}] ".format(i))
+            num_run.Foreground = grey_brush
+            # num_run.BaselineAlignment = System.Windows.BaselineAlignment.Superscript
+            # Superscript often messes up line height in WPF TextBlock, keeping inline for now
+            tb.Inlines.Add(num_run)
             
-            # Icon
+            # Clean Title
+            title = source.get('title', 'Unknown Source')
+            # Remove "Sharepoint Page" if present at end
+            if title.lower().endswith(" - sharepoint page"):
+                title = title[:-17] # len(" - sharepoint page")
+            elif title.lower().endswith(" sharepoint page"):
+                title = title[:-16]
+
+            # Clickable Title
+            link = Hyperlink()
+            link.TextDecorations = None
+            link.Foreground = self.FindResource("PrimaryColor")
+            link.NavigateUri = System.Uri(source['url'])
+            link.RequestNavigate += self.on_hyperlink_click
+            
+            link_run = Run(title)
+            link.Inlines.Add(link_run)
+            
+            # Tooltip with full details
+            link.ToolTip = source.get('title', title)
+            
+            tb.Inlines.Add(link)
+            
+            # Add SharePoint icon if available
             if sp_icon_bitmap:
                 img = Image()
                 img.Source = sp_icon_bitmap
-                img.Width = 12
-                img.Height = 12
-                img.Margin = Thickness(0, 1, 6, 0)
-                chip_stack.Children.Add(img)
+                img.Width = 10
+                img.Height = 10
+                # img.Margin = Thickness(4, 0, 0, 0)
+                container = InlineUIContainer(img)
+                container.BaselineAlignment = System.Windows.BaselineAlignment.Center
+                
+                # Add a space before icon
+                tb.Inlines.Add(Run(" "))
+                tb.Inlines.Add(container)
             
-            # Link Text
-            # We use a Button styled as a link or just a clickable text
-            # Creating a Hyperlink inside a TextBlock inside the chip
-            
-            tb = TextBlock()
-            
-            hyperlink = Hyperlink()
-            link_run = Run(source['title'])
-            link_run.FontSize = 11
-            hyperlink.Inlines.Add(link_run)
-            hyperlink.NavigateUri = System.Uri(source['url'])
-            hyperlink.RequestNavigate += self.on_hyperlink_click
-            hyperlink.Foreground = grey_brush
-            hyperlink.TextDecorations = None
-            
-            tb.Inlines.Add(hyperlink)
-            chip_stack.Children.Add(tb)
-            
-            source_border.Child = chip_stack
-            panel.Children.Add(source_border)
+            panel.Children.Add(tb)
             
         return panel
 
@@ -756,7 +962,7 @@ class StandardsChatWindow(Window):
             
             # Create Grid
             grid = Grid()
-            grid.Margin = Thickness(0, 2, 0, 2)
+            grid.Margin = Thickness(0, 0, 0, 0) # Compact margin handled by ItemStyle
             col1 = ColumnDefinition()
             col1.Width = GridLength(1, GridUnitType.Star)
             col2 = ColumnDefinition()
@@ -772,7 +978,8 @@ class StandardsChatWindow(Window):
             title_txt.Text = session['title']
             title_txt.FontSize = 12
             title_txt.TextWrapping = TextWrapping.Wrap
-            title_txt.MaxHeight = 36
+            title_txt.TextTrimming = TextTrimming.CharacterEllipsis
+            title_txt.MaxHeight = 50 # Allow ~3 lines
             title_txt.Foreground = self.FindResource("TextPrimaryColor")
             title_txt.ToolTip = session['title']
 
@@ -792,6 +999,8 @@ class StandardsChatWindow(Window):
             del_btn.Cursor = System.Windows.Input.Cursors.Hand
             del_btn.Tag = session['session_id']
             del_btn.ToolTip = "Delete Chat"
+            del_btn.VerticalAlignment = System.Windows.VerticalAlignment.Top # Align to top for multiline
+            del_btn.Style = self.FindResource("SidebarButtonStyle") # Use sidebar style
             Grid.SetColumn(del_btn, 1)
             
             # Wire up delete event
@@ -902,7 +1111,16 @@ class StandardsChatWindow(Window):
         # Only if enabled in settings
         revit_context = None
         if self.config.get('features', 'include_context', default=True):
-            revit_context = extract_revit_context()
+            try:
+                raw_context = extract_revit_context()
+                if raw_context:
+                    # Sanitize via JSON roundtrip to ensure no COM objects leak to background thread
+                    # This also ensures deep copy
+                    json_str = json.dumps(raw_context, ensure_ascii=False)
+                    revit_context = json.loads(json_str)
+            except Exception as e:
+                safe_print("Warning: Failed to capture or sanitize Revit context: {}".format(safe_str(e)))
+                revit_context = None
         
         # Capture screenshot if enabled via toggle
         from .utils import capture_revit_screenshot
@@ -989,7 +1207,6 @@ class StandardsChatWindow(Window):
                 # Callback for streaming chunks
                 def on_chunk(text_chunk):
                     try:
-                        safe_print(u"DEBUG: on_chunk callback received chunk")
                         self.Dispatcher.Invoke(
                             lambda: self.append_to_streaming_response(text_chunk)
                         )
@@ -1077,7 +1294,63 @@ class StandardsChatWindow(Window):
                 
             except Exception as e:
                 import traceback
-                error_msg = u"Sorry, I encountered an error: {}".format(safe_str(e))
+                tb = traceback.format_exc()
+                safe_print("Error processing query: " + safe_str(e))
+                safe_print(tb)
+
+                # Write traceback to log file for debugging
+                # Each write is independent so partial failures don't lose earlier lines
+                try:
+                    import os, io as _io
+                    from datetime import datetime
+                    from standards_chat.utils import safe_str_ascii, ascii_safe
+                    log_dir = os.path.join(os.environ.get('APPDATA', ''), 'BBB', 'StandardsAssistant')
+                    if not os.path.exists(log_dir):
+                        os.makedirs(log_dir)
+                    log_path = os.path.join(log_dir, 'error_log.txt')
+                    f = _io.open(log_path, 'a', encoding='utf-8')
+                    try:
+                        f.write(u"\n=== {} ===\n".format(datetime.now().isoformat()))
+                    except Exception:
+                        pass
+                    try:
+                        f.write(u"Error type: {}\n".format(type(e).__name__))
+                    except Exception:
+                        pass
+                    try:
+                        # Use repr() which is safest for exception objects
+                        f.write(u"Error repr: {}\n".format(ascii_safe(repr(e))))
+                    except Exception:
+                        pass
+                    try:
+                        f.write(u"Traceback:\n{}\n".format(ascii_safe(tb)))
+                    except Exception:
+                        pass
+                    f.close()
+                except Exception:
+                    pass
+
+                # Show simpler error to user but invalid COM object specifically
+                # Ultra-safe error message creation - never let Unicode through
+                try:
+                    from standards_chat.utils import safe_str_ascii
+                    err_text = safe_str_ascii(e)
+                    if "COM object" in err_text and "RCW" in err_text:
+                        err_text += "\n(Revit API context lost during background processing)"
+                    # Double-check it's ASCII-safe before formatting
+                    err_text = safe_str_ascii(err_text)
+                except Exception as conv_err:
+                    err_text = u"An error occurred (details in console)"
+
+                # Final safety: wrap the entire message creation
+                try:
+                    error_msg = u"Sorry, I encountered an error: {}".format(err_text)
+                    # Ensure the final message is ASCII-safe
+                    from standards_chat.utils import ascii_safe
+                    error_msg = ascii_safe(error_msg)
+                except Exception:
+                    error_msg = u"Sorry, an error occurred. Please check the console for details."
+
                 self.Dispatcher.Invoke(
                     lambda: self.replace_typing_with_response(error_msg, None)
                 )
@@ -1247,27 +1520,39 @@ class StandardsChatWindow(Window):
         """Append text chunk to streaming response"""
         try:
             if hasattr(self, 'streaming_textblock') and self.streaming_textblock:
-                # CRITICAL: After Dispatcher.Invoke crossing, text_chunk becomes .NET String
-                # Convert it back to Python unicode using str() to force through Python type system
-                text_chunk = unicode(str(text_chunk))
-                
+                # Convert to Python unicode and sanitize to ASCII immediately
+                from standards_chat.utils import safe_str, ascii_safe
+                text_chunk = ascii_safe(safe_str(text_chunk))
+
                 # Defensive: ensure streaming_text is also Python unicode
                 if not isinstance(self.streaming_text, unicode):
-                    self.streaming_text = unicode(str(self.streaming_text))
-                
-                # Now both are Python unicode - safe to concatenate
+                    self.streaming_text = ascii_safe(safe_str(self.streaming_text))
+
+                # Now both are ASCII-safe Python unicode - safe to concatenate
                 self.streaming_text = self.streaming_text + text_chunk
-                
+
                 # Re-render with formatting
                 self.streaming_textblock.Inlines.Clear()
                 self._add_formatted_text(self.streaming_textblock, self.streaming_text)
-                
+
                 # Scroll to bottom
                 self.message_scrollviewer.ScrollToBottom()
         except Exception as e:
-            safe_print(u"ERROR in append_to_streaming_response: {}".format(safe_str(e)))
-            import traceback
-            safe_print(u"Traceback: {}".format(safe_str(traceback.format_exc())))
+            # Log to file since pyRevit console may be disposed
+            try:
+                import os, io, traceback
+                from standards_chat.utils import safe_str_ascii, ascii_safe
+                from datetime import datetime
+                log_dir = os.path.join(os.environ.get('APPDATA', ''), 'BBB', 'StandardsAssistant')
+                if not os.path.exists(log_dir):
+                    os.makedirs(log_dir)
+                f = io.open(os.path.join(log_dir, 'error_log.txt'), 'a', encoding='utf-8')
+                f.write(u"\n=== {} [append_to_streaming] ===\n".format(datetime.now().isoformat()))
+                f.write(u"Error: {}\n".format(safe_str_ascii(e)))
+                f.write(u"Traceback:\n{}\n".format(ascii_safe(traceback.format_exc())))
+                f.close()
+            except Exception:
+                pass
     
     def finish_streaming_response(self, sources):
         """Add sources and apply formatting to completed streaming response"""
@@ -1289,7 +1574,7 @@ class StandardsChatWindow(Window):
                 
                 # Clear and reformat with markdown (WITHOUT the JSON)
                 self.streaming_textblock.Inlines.Clear()
-                self._add_formatted_text(self.streaming_textblock, display_text)
+                self._add_formatted_text(self.streaming_textblock, display_text, sources=sources)
                 
                 # Add action buttons if enabled in settings
                 actions_enabled = self.config.get('features', 'enable_actions', default=True)
@@ -1308,6 +1593,18 @@ class StandardsChatWindow(Window):
                     sources_panel = self._create_sources_panel(sources)
                     if sources_panel and hasattr(self, 'streaming_content_stack'):
                         self.streaming_content_stack.Children.Add(sources_panel)
+                
+                # Check if response indicates unable to find information
+                # Look for the specific phrase we instructed Claude to use
+                # Use safe string comparison to avoid Unicode issues
+                try:
+                    # Ensure display_text is unicode for comparison
+                    check_text = display_text if isinstance(display_text, unicode) else unicode(display_text)
+                    if u"I couldn't find this information in BBB's standards documentation" in check_text:
+                        # Add DCT ticket suggestion panel
+                        self._add_dct_ticket_panel()
+                except Exception as detect_err:
+                    safe_print(u"Error detecting no-answer phrase: {}".format(safe_str(detect_err)))
             
             # Scroll to bottom
             self.message_scrollviewer.ScrollToBottom()
@@ -1317,7 +1614,8 @@ class StandardsChatWindow(Window):
             self.streaming_border = None
             self.streaming_text = u""
         except Exception as e:
-            safe_print("Error in finish_streaming_response: {}".format(safe_str(e)))
+            from standards_chat.utils import safe_str_ascii
+            safe_print("Error in finish_streaming_response: {}".format(safe_str_ascii(e)))
             # Don't crash processing, just finish up
             self.streaming_textblock = None
             self.streaming_border = None
@@ -1433,8 +1731,9 @@ class StandardsChatWindow(Window):
                 self.action_executor.execute_action(action_data, callback=on_action_complete)
         
         except Exception as e:
+            from standards_chat.utils import safe_str_ascii
             forms.alert(
-                "Error executing action:\n{}".format(safe_str(e)),
+                "Error executing action:\n{}".format(safe_str_ascii(e)),
                 title="Error",
                 warn_icon=True
             )
@@ -1456,7 +1755,8 @@ class StandardsChatWindow(Window):
         # Set style based on user/assistant
         if is_user:
             border.Style = self.FindResource("MessageBubbleUser")
-            text_color = Brushes.White
+            # Uses default foreground from style or parent (which should be black/primary now)
+            text_color = self.FindResource("TextPrimaryColor")
         else:
             border.Style = self.FindResource("MessageBubbleAssistant")
             text_color = self.FindResource("TextPrimaryColor")
@@ -1467,28 +1767,54 @@ class StandardsChatWindow(Window):
         textblock.Foreground = text_color
 
         # Basic markdown parsing for assistant messages
+        if False: # Disabled for user messages too if we want markdown there
+             pass
+             
         if not is_user:
             self._add_formatted_text(textblock, text)
         else:
+            # User messages are plain text
             textblock.Inlines.Add(Run(text))
 
-        # Add subdued source links
+        # Add subdued source links (Legacy path, now mostly handled by finish_streaming_response)
         if sources and not is_user:
-                        self._add_sources_to_textblock(textblock, sources)
+             # This legacy method added them inside the bubble.
+             # We prefer the separate panel created in finish_streaming_response
+             pass 
+
         border.Child = textblock
 
         # Wrap with avatar and add to panel
         container = self._wrap_with_avatar(border, is_user)
         self.messages_panel.Children.Add(container)
+        
+        # If we have sources and it's not user, add the panel below
+        if sources and not is_user:
+             panel = self._create_sources_panel(sources)
+             if panel:
+                 # We need to add it to the bubble stack which is inside the container
+                 # _wrap_with_avatar returns Grid(Avatar, StackPanel(Bubble)) for assistant columns.
+                 # The StackPanel is the second child (index 1).
+                 try:
+                     from System.Windows.Controls import StackPanel
+                     bubble_stack = container.Children[1]
+                     if isinstance(bubble_stack, StackPanel):
+                         bubble_stack.Children.Add(panel)
+                 except Exception as e:
+                     logger.error("Error appending sources panel in add_message: {}".format(e))
+                     pass
 
         # Scroll to bottom
         self.message_scrollviewer.ScrollToBottom()
     
-    def _add_formatted_text(self, textblock, text):
+    def _add_formatted_text(self, textblock, text, sources=None):
         """Add text with basic markdown formatting"""
         try:
-            # Text should already be unicode from append_to_streaming_response
-            # No extensive logging needed anymore
+            from standards_chat.utils import ascii_safe, safe_str_ascii
+            
+            # CRITICAL: Ensure text is ASCII-safe BEFORE any processing
+            text = ascii_safe(text)
+            
             import re
             
             lines = text.split(u'\n')
@@ -1506,11 +1832,11 @@ class StandardsChatWindow(Window):
                     textblock.Inlines.Add(run)
                     continue
                     
-                # Handle bullet points
+                # Handle bullet points - USE ASCII ONLY
                 prefix = u""
                 content = line
                 if line.strip().startswith(u'- ') or line.strip().startswith(u'* '):
-                    prefix = u"  \u2022 "
+                    prefix = u"  * "  # Use ASCII asterisk instead of Unicode bullet
                     content = line.strip()[2:]
                 # Handle numbered lists
                 elif re.match(u'^\\d+\\.\\s', line.strip()):
@@ -1522,13 +1848,64 @@ class StandardsChatWindow(Window):
                     textblock.Inlines.Add(Run(prefix))
                 
                 try:
-                    # Process inline formatting (Bold and Links)
+                    # Process inline formatting (Bold, Links, Citations)
                     # Regex for markdown links: [text](url)
-                    link_pattern = u'(\\[[^\\]]+\\]\\([^)]+\\))'
-                    parts = re.split(link_pattern, content)
+                    # Regex for citations: [1], [15], etc.
+                    # Split pattern captures all interesting parts
+                    # Capture groups: 1=Link, 2=Citation, 3=RawURL
+                    
+                    split_pattern = u'(\\[[^\\]]+\\]\\([^)]+\\))|(\\[\\d+\\])|(https?://[^\\s]+)'
+                    parts = re.split(split_pattern, content)
                 
                     for part in parts:
-                        # Check if it's a markdown link
+                        if not part: continue
+                        
+                        # Ensure every part is ASCII-safe before processing
+                        part = ascii_safe(part)
+                        
+                        # Case 1: Citations [1]
+                        citation_match = re.match(u'^\\[(\\d+)\\]$', part)
+                        if citation_match:
+                            index = int(citation_match.group(1))
+                            
+                            # Create small citation link
+                            hlink = Hyperlink()
+                            hlink.TextDecorations = None
+                            hlink.Foreground = self.FindResource("PrimaryColor")
+                            
+                            # Try to get tooltip from sources
+                            tooltip_text = "Source " + str(index)
+                            target_url = None
+                            
+                            if sources and index > 0 and index <= len(sources):
+                                source = sources[index-1]
+                                title = source.get('title', 'Unknown')
+                                # Clean title
+                                if title.lower().endswith(" - sharepoint page"): title = title[:-17]
+                                elif title.lower().endswith(" sharepoint page"): title = title[:-16]
+                                # Ensure title is ASCII-safe for tooltip
+                                tooltip_text = ascii_safe(title)
+                                target_url = source.get('url')
+                                
+                            hlink.ToolTip = tooltip_text
+                            
+                            # Make clickable if we have a URL
+                            if target_url:
+                                hlink.NavigateUri = System.Uri(target_url)
+                                hlink.RequestNavigate += self.on_hyperlink_click
+                                hlink.Cursor = System.Windows.Input.Cursors.Hand
+
+                            # Content
+                            run = Run(part)
+                            run.FontSize = 10 
+                            run.FontWeight = System.Windows.FontWeights.SemiBold
+                            # run.BaselineAlignment = System.Windows.BaselineAlignment.Superscript
+                            hlink.Inlines.Add(run)
+                            
+                            textblock.Inlines.Add(hlink)
+                            continue
+
+                        # Case 2: Markdown Links [text](url)
                         link_match = re.match(u'\\[([^\\]]+)\\]\\(([^)]+)\\)', part)
                         if link_match:
                             link_text = link_match.group(1)
@@ -1543,52 +1920,48 @@ class StandardsChatWindow(Window):
                                 textblock.Inlines.Add(hyperlink)
                             except:
                                 textblock.Inlines.Add(Run(link_text))
-                        else:
-                            # Check for raw URLs in the text part
-                            # Regex for raw URLs: http://... or https://...
-                            url_pattern = u'(https?://[^\\s]+)'
-                            sub_parts = re.split(url_pattern, part)
+                            continue
                             
-                            for sub_part in sub_parts:
-                                if re.match(url_pattern, sub_part):
-                                    # It's a raw URL
-                                    hyperlink = Hyperlink()
-                                    hyperlink.Inlines.Add(Run(sub_part))
-                                    try:
-                                        hyperlink.NavigateUri = System.Uri(sub_part)
-                                        hyperlink.RequestNavigate += self.on_hyperlink_click
-                                        hyperlink.Foreground = self.FindResource("PrimaryColor")
-                                        textblock.Inlines.Add(hyperlink)
-                                    except:
-                                        textblock.Inlines.Add(Run(sub_part))
-                                else:
-                                    # Process bold in non-link text
-                                    if u'**' in sub_part:
-                                        bold_parts = re.split(u'(\\*\\*.*?\\*\\*)', sub_part)
-                                        for bold_part in bold_parts:
-                                            if bold_part.startswith(u'**') and bold_part.endswith(u'**'):
-                                                run = Run(bold_part[2:-2])
-                                                run.FontWeight = System.Windows.FontWeights.Bold
-                                                textblock.Inlines.Add(run)
-                                            elif bold_part:
-                                                textblock.Inlines.Add(Run(bold_part))
-                                    else:
-                                        if sub_part:
-                                            textblock.Inlines.Add(Run(sub_part))
+                        # Case 3: Raw URLs
+                        if re.match(u'^https?://', part):
+                            hyperlink = Hyperlink()
+                            hyperlink.Inlines.Add(Run(part))
+                            try:
+                                hyperlink.NavigateUri = System.Uri(part)
+                                hyperlink.RequestNavigate += self.on_hyperlink_click
+                                hyperlink.Foreground = self.FindResource("PrimaryColor")
+                                textblock.Inlines.Add(hyperlink)
+                            except:
+                                textblock.Inlines.Add(Run(part))
+                            continue
+                        
+                        # Case 4: Plain text with bold
+                        if u'**' in part:
+                            bold_parts = re.split(u'(\\*\\*.*?\\*\\*)', part)
+                            for bold_part in bold_parts:
+                                if bold_part.startswith(u'**') and bold_part.endswith(u'**'):
+                                    run = Run(bold_part[2:-2])
+                                    run.FontWeight = System.Windows.FontWeights.Bold
+                                    textblock.Inlines.Add(run)
+                                elif bold_part:
+                                    textblock.Inlines.Add(Run(bold_part))
+                        else:
+                            textblock.Inlines.Add(Run(part))
+                            
                 except Exception as line_error:
-                    safe_print(u"ERROR processing line in _add_formatted_text: {}".format(safe_str(line_error)))
+                    safe_print(u"ERROR processing line in _add_formatted_text: {}".format(safe_str_ascii(line_error)))
                     # Add the line as plain text if formatting fails
                     try:
-                        textblock.Inlines.Add(Run(safe_str(line)))
+                        textblock.Inlines.Add(Run(ascii_safe(line)))
                     except:
                         pass
         except Exception as e:
-            safe_print(u"ERROR in _add_formatted_text: {}".format(safe_str(e)))
+            safe_print(u"ERROR in _add_formatted_text: {}".format(safe_str_ascii(e)))
             import traceback
-            safe_print(u"Traceback: {}".format(safe_str(traceback.format_exc())))
+            safe_print(u"Traceback: {}".format(safe_str_ascii(traceback.format_exc())))
             # Add text as plain if formatting completely fails
             try:
-                textblock.Inlines.Add(Run(safe_str(text)))
+                textblock.Inlines.Add(Run(ascii_safe(text)))
             except:
                 textblock.Inlines.Add(Run(u"<Error displaying text>"))
     
@@ -1600,6 +1973,135 @@ class StandardsChatWindow(Window):
         except Exception as e:
             safe_print("Error opening link: " + safe_str(e))
         args.Handled = True
+    
+    def _add_dct_ticket_panel(self):
+        """Add DCT support button inside the chat bubble with a rotating message"""
+        try:
+            if not hasattr(self, 'streaming_border') or not self.streaming_border:
+                return
+
+            from System.Windows.Controls import StackPanel, Button, Separator
+            from System.Windows.Documents import Run
+
+            # Rotating playful messages
+            messages = [
+                u"Hmm, I'm stumped. Maybe it's time to ask the humans!",
+                u"This one's beyond me -- the DCT team will know!",
+                u"I've hit my limit. The real experts can help from here.",
+                u"Not in my notes! Let's get a human on this one.",
+                u"Time to phone a friend? DCT's got your back.",
+                u"Even I have my blind spots. The team can help!",
+                u"I wish I knew! DCT will have the answer though.",
+            ]
+            message = messages[random.randint(0, len(messages) - 1)]
+
+            # Get existing content from the bubble border
+            existing_child = self.streaming_border.Child
+            self.streaming_border.Child = None
+
+            # Create stack to hold text + divider + CTA inside the bubble
+            inner_stack = StackPanel()
+            inner_stack.Children.Add(existing_child)
+
+            # Subtle divider line
+            divider = Border()
+            divider.Height = 1
+            divider.Background = SolidColorBrush(Color.FromRgb(0xE0, 0xE0, 0xE0))
+            divider.Margin = Thickness(0, 12, 0, 10)
+            inner_stack.Children.Add(divider)
+
+            # Message text
+            msg_text = TextBlock()
+            msg_text.Text = message
+            msg_text.TextWrapping = TextWrapping.Wrap
+            msg_text.FontSize = 12
+            msg_text.FontStyle = System.Windows.FontStyles.Italic
+            msg_text.Foreground = SolidColorBrush(Color.FromRgb(0x60, 0x60, 0x60))
+            msg_text.Margin = Thickness(0, 0, 0, 8)
+            inner_stack.Children.Add(msg_text)
+
+            # Button with rounded corners via ControlTemplate
+            from System.Windows.Controls import ControlTemplate, ContentPresenter
+            from System.Windows.Markup import XamlReader as BtnXamlReader
+
+            button = Button()
+            button.Background = self.FindResource("PrimaryColor")
+            button.Foreground = Brushes.White
+            button.Padding = Thickness(14, 8, 16, 8)
+            button.BorderThickness = Thickness(0)
+            button.HorizontalAlignment = HorizontalAlignment.Left
+            button.Cursor = System.Windows.Input.Cursors.Hand
+
+            # Rounded corner template
+            template_xaml = u"""<ControlTemplate
+                xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                TargetType="Button">
+                <Border x:Name="border"
+                        Background="{TemplateBinding Background}"
+                        CornerRadius="6"
+                        Padding="{TemplateBinding Padding}">
+                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Border>
+                <ControlTemplate.Triggers>
+                    <Trigger Property="IsEnabled" Value="False">
+                        <Setter Property="Opacity" Value="0.6"/>
+                    </Trigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate>"""
+            button.Template = BtnXamlReader.Parse(template_xaml)
+
+            # Button content: icon + text in a horizontal stack
+            btn_content = StackPanel()
+            btn_content.Orientation = Orientation.Horizontal
+
+            # Small arrow/external-link icon
+            icon_text = TextBlock()
+            icon_text.Text = u">"
+            icon_text.FontSize = 12
+            icon_text.FontWeight = System.Windows.FontWeights.Bold
+            icon_text.Foreground = Brushes.White
+            icon_text.Margin = Thickness(0, 0, 6, 0)
+            icon_text.VerticalAlignment = System.Windows.VerticalAlignment.Center
+            btn_content.Children.Add(icon_text)
+
+            label_text = TextBlock()
+            label_text.Text = u"Open a Ticket with DCT"
+            label_text.FontSize = 12
+            label_text.FontWeight = System.Windows.FontWeights.SemiBold
+            label_text.Foreground = Brushes.White
+            label_text.VerticalAlignment = System.Windows.VerticalAlignment.Center
+            btn_content.Children.Add(label_text)
+
+            button.Content = btn_content
+
+            # Store ticket URL in button tag
+            button.Tag = u"https://portal.bbbarch.com/a/tickets/new"
+            button.Click += self._on_dct_button_click
+
+            # Hover effects
+            normal_bg = self.FindResource("PrimaryColor")
+            hover_bg = SolidColorBrush(Color.FromRgb(0x00, 0x5A, 0x9E))
+            button.MouseEnter += lambda s, e: s.SetValue(Button.BackgroundProperty, hover_bg)
+            button.MouseLeave += lambda s, e: s.SetValue(Button.BackgroundProperty, normal_bg)
+
+            inner_stack.Children.Add(button)
+
+            # Put the stack back inside the bubble
+            self.streaming_border.Child = inner_stack
+
+        except Exception as e:
+            safe_print(u"Error creating DCT ticket panel (non-critical): {}".format(safe_str(e))[:200])
+    
+    def _on_dct_button_click(self, sender, args):
+        """Handle DCT ticket button click"""
+        import webbrowser
+        try:
+            button = sender
+            url = button.Tag
+            webbrowser.open(str(url))
+        except Exception as e:
+            safe_print(u"Error opening DCT ticket link: {}".format(safe_str(e)))
     
     def show_loading(self, status="Loading..."):
         """Show loading overlay with animated spinner"""

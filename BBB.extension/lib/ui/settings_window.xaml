@@ -129,6 +129,20 @@
                         <TextBox x:Name="user_name" 
                                  ToolTip="Your name for analytics tracking"/>
                         
+                        <TextBlock Text="Associated Avatar:" FontWeight="Normal" Margin="0,12,0,2"/>
+                        <StackPanel Orientation="Horizontal">
+                             <ComboBox x:Name="avatar_combo" 
+                                       Width="200" 
+                                       Height="30"
+                                       HorizontalAlignment="Left" 
+                                       Margin="0,0,15,0"
+                                       VerticalContentAlignment="Center"
+                                       SelectionChanged="avatar_selection_changed"/>
+                             <Border Width="32" Height="32" CornerRadius="16" BorderThickness="1" BorderBrush="#E0E0E0" Background="#F3F3F3">
+                                <Image x:Name="avatar_preview" Stretch="UniformToFill"/>
+                             </Border>
+                        </StackPanel>
+
                         <TextBlock Text="Studio/Team (Optional):" FontWeight="Normal" Margin="0,12,0,2"/>
                         <TextBox x:Name="user_team" 
                                  ToolTip="Your studio or team name"/>

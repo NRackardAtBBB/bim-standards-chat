@@ -27,7 +27,7 @@
 
         <!-- Message Bubbles -->
         <Style x:Key="MessageBubbleUser" TargetType="Border">
-            <Setter Property="Background" Value="Black"/>
+            <Setter Property="Background" Value="#D0D0D0"/>
             <Setter Property="CornerRadius" Value="12,0,12,12"/>
             <Setter Property="Padding" Value="12"/>
             <Setter Property="Margin" Value="50,5,4,5"/>
@@ -119,8 +119,8 @@
         <!-- History Item Style -->
         <Style x:Key="HistoryItemStyle" TargetType="ListBoxItem">
             <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="Padding" Value="12,10"/>
-            <Setter Property="Margin" Value="5,2"/>
+            <Setter Property="Padding" Value="12,6"/>
+            <Setter Property="Margin" Value="0,1"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ListBoxItem">
@@ -216,8 +216,8 @@
                     <Button.Content>
                         <Border Background="#E8F4FD" CornerRadius="14" Width="28" Height="28">
                             <Image x:Name="HeaderIcon"
-                                   Width="20"
-                                   Height="20"
+                                   Width="26"
+                                   Height="26"
                                    HorizontalAlignment="Center"
                                    VerticalAlignment="Center"/>
                         </Border>
