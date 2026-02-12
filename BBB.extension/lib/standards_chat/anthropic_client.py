@@ -12,6 +12,7 @@ import System
 from System.Net.Http import HttpClient, HttpRequestMessage, HttpMethod
 from System.Net.Http.Headers import MediaTypeWithQualityHeaderValue
 from System.Text import Encoding
+from standards_chat.utils import safe_print, safe_str
 
 
 class AnthropicClient:
@@ -24,7 +25,8 @@ class AnthropicClient:
         self.model = config.get('anthropic', 'model')
         self.max_tokens = config.get('anthropic', 'max_tokens')
         self.temperature = config.get('anthropic', 'temperature')
-        self.system_prompt = config.get('anthropic', 'system_prompt')
+        from standards_chat.utils import ascii_safe
+        self.system_prompt = ascii_safe(config.get('anthropic', 'system_prompt'))
         self.base_url = "https://api.anthropic.com/v1"
         
         # Create HTTP client
@@ -95,8 +97,8 @@ class AnthropicClient:
                 "messages": messages,
                 "temperature": 0.5
             }
-            
-            json_content = json.dumps(request_body)
+
+            json_content = json.dumps(request_body, ensure_ascii=True)
             content = System.Net.Http.StringContent(
                 json_content,
                 Encoding.UTF8,
@@ -118,8 +120,90 @@ class AnthropicClient:
                 return None
                 
         except Exception as e:
-            print("Error generating title: {}".format(str(e)))
+            safe_print("Error generating title: {}".format(safe_str(e)))
             return None
+
+    def get_search_keywords(self, user_query, index_data=None):
+        """
+        Extract search keywords from a user query, optionally using an index
+        
+        Args:
+            user_query (str): The user's search query
+            index_data (list): Optional list of page metadata to inform keyword selection
+            
+        Returns:
+            str: A string of keywords
+        """
+        try:
+            if index_data:
+                # Format index for prompt (limit to avoid token limits if needed, but 200 pages is fine)
+                index_str = ""
+                for page in index_data:
+                    title = page.get('title', 'Untitled')
+                    desc = page.get('description', '')
+                    if desc:
+                        index_str += "- {} ({})\n".format(title, desc)
+                    else:
+                        index_str += "- {}\n".format(title)
+                
+                prompt = """You are a search optimization assistant. 
+Here is an index of available SharePoint pages:
+{}
+
+The user asked: '{}'
+
+Return a list of 3-5 specific search keywords that are most likely to retrieve the relevant pages from this index. 
+Focus on the terminology used in the index.
+Return ONLY the keywords separated by spaces. Do not include any other text.""".format(index_str, user_query)
+            else:
+                prompt = "Extract 3-5 key search terms from this query. Return only the terms separated by spaces, no other text. Query: " + user_query
+            
+            messages = [
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ]
+            
+            request_body = {
+                "model": "claude-3-haiku-20240307", # Use fast/cheap model
+                "max_tokens": 100,
+                "messages": messages,
+                "temperature": 0
+            }
+
+            json_content = json.dumps(request_body, ensure_ascii=True)
+            content = System.Net.Http.StringContent(
+                json_content,
+                Encoding.UTF8,
+                "application/json"
+            )
+            
+            # Send request
+            response = self.client.PostAsync(self.base_url + "/messages", content).Result
+            response_text = response.Content.ReadAsStringAsync().Result
+            
+            if response.IsSuccessStatusCode:
+                response_json = json.loads(response_text)
+                text = response_json['content'][0]['text'].strip()
+                
+                # Extract usage
+                usage = response_json.get('usage', {})
+                input_tokens = usage.get('input_tokens', 0)
+                output_tokens = usage.get('output_tokens', 0)
+                
+                return {
+                    'keywords': text,
+                    'input_tokens': input_tokens,
+                    'output_tokens': output_tokens
+                }
+            else:
+                safe_print("Keyword extraction failed: " + response_text)
+                return {'keywords': user_query, 'input_tokens': 0, 'output_tokens': 0}
+                
+        except Exception as e:
+            safe_print("Error extracting keywords: {}".format(safe_str(e)))
+            return {'keywords': user_query, 'input_tokens': 0, 'output_tokens': 0}
     
     def get_response_stream(self, user_query, notion_pages, revit_context=None, 
                            conversation_history=None, callback=None, screenshot_base64=None):
@@ -148,22 +232,52 @@ class AnthropicClient:
             screenshot_base64
         )
         
-        # Make streaming API call
-        full_text = self._call_api_stream(messages, callback)
+        # Make streaming API call (returns dict with text and usage when available)
+        stream_result = self._call_api_stream(messages, callback)
+        if isinstance(stream_result, dict):
+            full_text = stream_result.get('text', '')
+            input_tokens = stream_result.get('input_tokens', 0)
+            output_tokens = stream_result.get('output_tokens', 0)
+        else:
+            full_text = stream_result
+            input_tokens = 0
+            output_tokens = 0
+
+        # Sanitize response text to pure ASCII before any processing
+        # Prevents UnicodeEncodeError when regex or other operations encounter non-ASCII chars
+        from standards_chat.utils import ascii_safe
+        full_text = ascii_safe(full_text)
+
+        # Extract citations from the response
+        cited_indices = self._extract_citations(full_text)
         
-        # Format sources
-        sources = [
-            {
-                'title': page['title'],
-                'url': page['url'],
-                'category': page.get('category', 'General')
-            }
-            for page in notion_pages
-        ]
+        # Filter sources to only include cited ones
+        sources = []
+        for i, page in enumerate(notion_pages, 1):  # 1-indexed to match citation numbers
+            if i in cited_indices:
+                sources.append({
+                    'title': page['title'],
+                    'url': page['url'],
+                    'category': page.get('category', 'General')
+                })
+        
+        # If no citations were found but we have pages, show top 3 as fallback
+        if not sources and notion_pages:
+            sources = [
+                {
+                    'title': page['title'],
+                    'url': page['url'],
+                    'category': page.get('category', 'General')
+                }
+                for page in notion_pages[:3]
+            ]
         
         return {
             'text': full_text,
-            'sources': sources
+            'sources': sources,
+            'input_tokens': input_tokens,
+            'output_tokens': output_tokens,
+            'model': self.model
         }
     
     def get_response(self, user_query, notion_pages, revit_context=None, 
@@ -196,77 +310,114 @@ class AnthropicClient:
         # Extract response
         response_text = response_data['content'][0]['text']
         
-        # Format sources
-        sources = [
-            {
-                'title': page['title'],
-                'url': page['url'],
-                'category': page.get('category', 'General')
-            }
-            for page in notion_pages
-        ]
+        # Extract citations from the response
+        cited_indices = self._extract_citations(response_text)
+        
+        # Filter sources to only include cited ones
+        sources = []
+        for i, page in enumerate(notion_pages, 1):  # 1-indexed to match citation numbers
+            if i in cited_indices:
+                sources.append({
+                    'title': page['title'],
+                    'url': page['url'],
+                    'category': page.get('category', 'General')
+                })
+        
+        # If no citations were found but we have pages, show top 3 as fallback
+        if not sources and notion_pages:
+            sources = [
+                {
+                    'title': page['title'],
+                    'url': page['url'],
+                    'category': page.get('category', 'General')
+                }
+                for page in notion_pages[:3]
+            ]
         
         return {
             'text': response_text,
-            'sources': sources
+            'sources': sources,
+            'input_tokens': response_data.get('input_tokens', 0),
+            'output_tokens': response_data.get('output_tokens', 0),
+            'model': self.model
         }
+    
+    def _extract_citations(self, text):
+        """Extract citation numbers from AI response text
+        
+        Args:
+            text (str): AI response text with citations like [1], [2]
+            
+        Returns:
+            set: Set of citation numbers (1-indexed) that were cited
+        """
+        import re
+        # Find all [number] patterns in the text
+        citations = re.findall(u'\\[(\\d+)\\]', text)
+        # Convert to integers and return as set
+        return set(int(c) for c in citations)
     
     def _build_context(self, notion_pages, revit_context):
         """Build context string from Notion pages and Revit info"""
+        from standards_chat.utils import ascii_safe
         context_parts = []
-        
+
         # Add Notion standards
         if notion_pages:
-            context_parts.append("# Relevant BBB Standards\n")
+            context_parts.append(u"# Relevant BBB Standards\n")
             for i, page in enumerate(notion_pages, 1):
                 context_parts.append(
-                    "## Standard {}: {}\n".format(i, page['title'])
+                    u"## Standard {}: {}\n".format(i, ascii_safe(page['title']))
                 )
                 context_parts.append(
-                    "Source: {}\n".format(page['url'])
+                    u"Source: {}\n".format(ascii_safe(page['url']))
                 )
                 if page.get('category'):
                     context_parts.append(
-                        "Category: {}\n".format(page['category'])
+                        u"Category: {}\n".format(ascii_safe(page['category']))
                     )
-                context_parts.append("\n{}\n\n".format(page['content']))
-        
+                context_parts.append(u"\n{}\n\n".format(ascii_safe(page['content'])))
+
         # Add Revit context if available
         if revit_context:
-            context_parts.append("\n# Current Revit Context\n")
+            context_parts.append(u"\n# Current Revit Context\n")
             for key, value in revit_context.items():
-                context_parts.append("- {}: {}\n".format(key, value))
-        
-        return ''.join(context_parts)
+                context_parts.append(u"- {}: {}\n".format(ascii_safe(key), ascii_safe(value)))
+
+        return u''.join(context_parts)
     
     def _build_messages(self, user_query, context, conversation_history, screenshot_base64=None):
         """Build messages array for API call"""
+        from standards_chat.utils import ascii_safe
         messages = []
-        
+
         # Add conversation history if present (last 3 exchanges)
         if conversation_history:
             recent_history = conversation_history[-3:]
             for exchange in recent_history:
                 messages.append({
                     "role": "user",
-                    "content": exchange['user']
+                    "content": ascii_safe(exchange['user'])
                 })
                 messages.append({
                     "role": "assistant",
-                    "content": exchange['assistant']
+                    "content": ascii_safe(exchange['assistant'])
                 })
-        
+
         # Build current user message with context
-        text_content = """{}
+        # context is already ascii_safe from _build_context
+        text_content = u"""{}
 
 User Question: {}
 
-Please provide a helpful, detailed answer based on BBB's standards documentation above. 
-When referencing specific standards, mention them by name.
+Please provide a helpful, detailed answer based on BBB's standards documentation above.
+IMPORTANT: When you reference information from a specific standard document, cite it using square brackets with the standard number, like [1] or [2]. These numbers correspond to the "Standard 1", "Standard 2", etc. listed above.
+For example: "According to the family naming standards [1], all families should..."
+Only cite sources that you actually reference in your answer.
 If multiple standards are relevant, explain how they work together.
 If the standards don't fully address the question, acknowledge this and provide your best guidance.""".format(
             context,
-            user_query
+            ascii_safe(user_query)
         )
         
         # If screenshot provided, use multi-modal content format
@@ -310,14 +461,14 @@ If the standards don't fully address the question, acknowledge this and provide 
             "system": system_prompt,
             "messages": messages
         }
-        
+
         request = HttpRequestMessage(HttpMethod.Post, url)
         request.Content = System.Net.Http.StringContent(
-            json.dumps(payload),
+            json.dumps(payload, ensure_ascii=True),
             Encoding.UTF8,
             "application/json"
         )
-        
+
         response = self.client.SendAsync(request).Result
         
         # Check for errors
@@ -332,6 +483,11 @@ If the standards don't fully address the question, acknowledge this and provide 
         
         content = response.Content.ReadAsStringAsync().Result
         data = json.loads(content)
+        
+        # Extract token usage if available
+        if 'usage' in data:
+            data['input_tokens'] = data['usage'].get('input_tokens', 0)
+            data['output_tokens'] = data['usage'].get('output_tokens', 0)
         
         return data
     
@@ -350,14 +506,14 @@ If the standards don't fully address the question, acknowledge this and provide 
             "messages": messages,
             "stream": True
         }
-        
+
         request = HttpRequestMessage(HttpMethod.Post, url)
         request.Content = System.Net.Http.StringContent(
-            json.dumps(payload),
+            json.dumps(payload, ensure_ascii=True),
             Encoding.UTF8,
             "application/json"
         )
-        
+
         response = self.client.SendAsync(request, System.Net.Http.HttpCompletionOption.ResponseHeadersRead).Result
         
         # Check for errors
@@ -374,8 +530,10 @@ If the standards don't fully address the question, acknowledge this and provide 
         stream = response.Content.ReadAsStreamAsync().Result
         reader = System.IO.StreamReader(stream, Encoding.UTF8)
         
-        full_text = ""
-        
+        full_text = u""
+        input_tokens = 0
+        output_tokens = 0
+
         while not reader.EndOfStream:
             line = reader.ReadLine()
             
@@ -389,20 +547,53 @@ If the standards don't fully address the question, acknowledge this and provide 
             
             try:
                 event_data = json.loads(data_str)
+
+                # Some streaming events include small deltas of text
                 event_type = event_data.get('type')
-                
+
                 if event_type == 'content_block_delta':
                     delta = event_data.get('delta', {})
                     if delta.get('type') == 'text_delta':
                         text_chunk = delta.get('text', '')
+
+                        # Ensure text_chunk is unicode and ASCII-safe
+                        if not isinstance(text_chunk, unicode):
+                            if isinstance(text_chunk, str):
+                                text_chunk = text_chunk.decode('utf-8')
+                            else:
+                                text_chunk = unicode(text_chunk)
+                        # Sanitize to ASCII immediately to prevent encoding
+                        # errors downstream in IronPython
+                        from standards_chat.utils import ascii_safe
+                        text_chunk = ascii_safe(text_chunk)
+
                         full_text += text_chunk
-                        
+
                         # Call callback with chunk
                         if callback:
                             callback(text_chunk)
+
+                # Capture usage if the API includes it in a final metadata/event payload
+                # Different event shapes may place usage under top-level 'usage',
+                # under 'metadata', or under a nested 'response' object. Check common locations.
+                if 'usage' in event_data and isinstance(event_data['usage'], dict):
+                    input_tokens = int(event_data['usage'].get('input_tokens', 0) or 0)
+                    output_tokens = int(event_data['usage'].get('output_tokens', 0) or 0)
+                else:
+                    # Check nested locations
+                    md = event_data.get('metadata') or event_data.get('response') or {}
+                    if isinstance(md, dict) and 'usage' in md:
+                        usage = md.get('usage', {})
+                        input_tokens = int(usage.get('input_tokens', 0) or 0)
+                        output_tokens = int(usage.get('output_tokens', 0) or 0)
+
             except Exception as e:
-                print("Error parsing stream chunk: {}".format(str(e)))
+                safe_print("Error parsing stream chunk: {}".format(safe_str(e)))
                 continue
         
         reader.Close()
-        return full_text
+        return {
+            'text': full_text,
+            'input_tokens': input_tokens,
+            'output_tokens': output_tokens
+        }

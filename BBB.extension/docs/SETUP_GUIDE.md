@@ -1,6 +1,6 @@
-# BBB Standards Assistant - Setup Guide
+# Kodama - Setup Guide
 
-This guide will walk you through setting up the BBB Standards Assistant from scratch.
+This guide will walk you through setting up Kodama from scratch.
 
 ## Part 1: Prerequisites
 
@@ -61,7 +61,7 @@ This guide will walk you through setting up the BBB Standards Assistant from scr
 1. Go to https://www.notion.so/my-integrations
 2. Click "**+ New integration**"
 3. Configure:
-   - **Name**: BBB Standards Assistant
+   - **Name**: Kodama
    - **Logo**: Upload your logo (optional)
    - **Associated workspace**: Select your workspace
    - **Type**: Internal Integration
@@ -74,7 +74,7 @@ This guide will walk you through setting up the BBB Standards Assistant from scr
 1. Open your "BBB Revit Standards" database in Notion
 2. Click "**Share**" (top right)
 3. Click "**Invite**"
-4. Find and select "**BBB Standards Assistant**" integration
+4. Find and select "**Kodama**" integration
 5. Click "**Invite**"
 
 ### Get Database ID
@@ -92,7 +92,7 @@ This guide will walk you through setting up the BBB Standards Assistant from scr
 3. Add billing information (required for API access)
 4. Go to "**API Keys**" in the left sidebar
 5. Click "**Create Key**"
-6. Name it "BBB Standards Assistant"
+6. Name it "Kodama"
 7. **Copy the API key** (starts with `sk-ant-`)
    - ⚠️ Keep this secure! You won't see it again.
 
@@ -150,9 +150,9 @@ Set up billing alerts in the Anthropic console to monitor usage.
 
 1. Navigate to: `%APPDATA%\pyRevit\Extensions\BBB.extension\config\`
 
-2. Open `api_keys.json` in a text editor
+2. Copy `api_keys.example.json` to `api_keys.json`
 
-3. Replace placeholder values:
+3. Open `api_keys.json` in a text editor and replace placeholder values:
    ```json
    {
      "notion_api_key": "secret_your_actual_key_from_part2",

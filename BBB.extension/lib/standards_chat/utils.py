@@ -3,6 +3,126 @@
 Utility Functions
 Helper functions for extracting context and formatting
 """
+import sys
+
+def safe_str(obj):
+    """Safely convert any object to a unicode string, handling encoding errors."""
+    # Check actual type name to avoid IronPython isinstance bugs
+    type_name = type(obj).__name__
+    
+    if type_name == 'unicode':
+        return obj
+    
+    if type_name == 'str':
+        # IronPython str may contain unicode chars - try multiple approaches
+        try:
+            # First try UTF-8 decode
+            return obj.decode('utf-8')
+        except (UnicodeDecodeError, AttributeError):
+            try:
+                # Try latin-1 which never fails
+                return obj.decode('latin-1')
+            except:
+                try:
+                    # Last resort: force unicode constructor
+                    return unicode(obj, errors='replace')
+                except:
+                    # Give up and use repr
+                    return unicode(repr(obj))
+    
+    try:
+        if isinstance(obj, Exception):
+            # Try args first as they are often the source of the message
+            if hasattr(obj, 'args') and obj.args:
+                return u", ".join([safe_str(arg) for arg in obj.args])
+        return unicode(obj)
+    except Exception:
+        try:
+            return unicode(repr(obj))
+        except Exception:
+            return u"<unprintable object>"
+
+def safe_print(msg):
+    """Safely print to stdout, handling encoding for IronPython console.
+
+    Silently fails if the output stream is unavailable (e.g. pyRevit output
+    window disposed) to prevent crashing Revit from background threads.
+    """
+    try:
+        if not isinstance(msg, unicode):
+            msg = safe_str(msg)
+        # Encode to ascii with replacement to be absolutely safe in Revit console
+        print(msg.encode('ascii', 'replace'))
+    except Exception:
+        # Do NOT call print() here - if the output stream's COM object is disposed,
+        # any print() will throw InvalidComObjectException and crash Revit
+        pass
+
+def ascii_safe(text):
+    """Convert unicode text to ASCII-safe unicode string, replacing problematic characters.
+    
+    Args:
+        text: Unicode string that may contain non-ASCII characters
+        
+    Returns:
+        Unicode string with all non-ASCII characters replaced with ASCII equivalents
+    """
+    if not isinstance(text, unicode):
+        text = safe_str(text)
+    
+    # Build result character by character
+    result = []
+    for char in text:
+        code = ord(char)
+        if code < 128:
+            # ASCII character - keep as is
+            result.append(char)
+        else:
+            # Non-ASCII character - replace with ASCII equivalent or placeholder
+            if code == 0x2026:  # ellipsis
+                result.append('...')
+            elif code == 0x2013:  # en dash
+                result.append('-')
+            elif code == 0x2014:  # em dash
+                result.append('--')
+            elif code == 0x2018 or code == 0x2019:  # smart single quotes
+                result.append("'")
+            elif code == 0x201C or code == 0x201D:  # smart double quotes
+                result.append('"')
+            elif code == 0x2022:  # bullet
+                result.append('*')
+            elif code == 0x00A0:  # non-breaking space
+                result.append(' ')
+            elif code == 0x00B0:  # degree symbol
+                result.append('deg')
+            elif code >= 0x0080 and code <= 0x00FF:  # Latin-1 supplement
+                # Try to approximate common Latin-1 chars
+                result.append('?')
+            else:
+                # Unknown non-ASCII character - use placeholder
+                result.append('?')
+    
+    return u''.join(result)
+
+def safe_str_ascii(obj):
+    """Safely convert any object to an ASCII-safe unicode string.
+    
+    This combines safe_str and ascii_safe to guarantee ASCII-compatible output.
+    Use this for error messages and any text that will be displayed or encoded.
+    
+    Args:
+        obj: Any object to convert
+        
+    Returns:
+        ASCII-safe unicode string
+    """
+    try:
+        # First convert to unicode
+        text = safe_str(obj)
+        # Then make it ASCII-safe
+        return ascii_safe(text)
+    except Exception:
+        return u"[Error converting to string]"
 
 try:
     from Autodesk.Revit.DB import *
@@ -18,6 +138,63 @@ except ImportError:
 
 import base64
 import io
+import ctypes
+import System.Diagnostics
+
+# Define RECT structure for Windows API
+class RECT(ctypes.Structure):
+    _fields_ = [
+        ("left", ctypes.c_long),
+        ("top", ctypes.c_long),
+        ("right", ctypes.c_long),
+        ("bottom", ctypes.c_long)
+    ]
+
+def get_revit_window_bounds():
+    """
+    Returns the bounding rectangle of the main Revit window.
+    Returns: (x, y, width, height) or None if failed.
+    """
+    try:
+        hwnd = None
+        
+        # 1. Try to get handle from pyrevit (most reliable)
+        try:
+            if 'revit' in globals() and hasattr(revit, 'uiapp'):
+                hwnd = revit.uiapp.MainWindowHandle
+        except Exception:
+            pass
+            
+        # 2. Fallback to process main window if it looks like Revit
+        if not hwnd:
+            process = System.Diagnostics.Process.GetCurrentProcess()
+            # Only use if title indicates it's Revit (avoids capturing plugin windows)
+            if "Revit" in process.MainWindowTitle:
+                hwnd = process.MainWindowHandle
+        
+        # Check if we got a valid handle
+        if not hwnd or (hasattr(hwnd, 'ToInt64') and hwnd.ToInt64() == 0):
+            return None
+            
+        # Handle IntPtr if needed
+        hwnd_val = hwnd.ToInt64() if hasattr(hwnd, 'ToInt64') else hwnd
+
+        # Prepare ctypes to call GetWindowRect from user32.dll
+        user32 = ctypes.windll.user32
+        rect = RECT()
+        
+        # Call the API
+        result = user32.GetWindowRect(hwnd_val, ctypes.byref(rect))
+        
+        if result:
+            width = rect.right - rect.left
+            height = rect.bottom - rect.top
+            return (rect.left, rect.top, width, height)
+            
+    except Exception as e:
+        print("Error getting window bounds: {}".format(str(e)))
+        
+    return None
 
 
 def capture_revit_screenshot():
@@ -39,9 +216,22 @@ def capture_revit_screenshot():
         from System.IO import MemoryStream
         import time
         
-        # Get primary screen bounds
-        screen = Forms.Screen.PrimaryScreen
-        bounds = screen.Bounds
+        # Get Revit window bounds
+        bounds_rect = get_revit_window_bounds()
+        
+        if bounds_rect:
+            x, y, width, height = bounds_rect
+            # Ensure valid dimensions
+            if width <= 0 or height <= 0:
+                # Fallback to primary screen
+                screen = Forms.Screen.PrimaryScreen
+                x, y = 0, 0
+                width, height = screen.Bounds.Width, screen.Bounds.Height
+        else:
+            # Fallback to primary screen
+            screen = Forms.Screen.PrimaryScreen
+            x, y = 0, 0
+            width, height = screen.Bounds.Width, screen.Bounds.Height
         
         # Retry logic for clipboard conflicts
         max_retries = 3
@@ -50,9 +240,9 @@ def capture_revit_screenshot():
         for attempt in range(max_retries):
             try:
                 # Create bitmap and capture screen
-                bitmap = Bitmap(bounds.Width, bounds.Height)
+                bitmap = Bitmap(width, height)
                 graphics = System.Drawing.Graphics.FromImage(bitmap)
-                graphics.CopyFromScreen(0, 0, 0, 0, bitmap.Size)
+                graphics.CopyFromScreen(x, y, 0, 0, bitmap.Size)
                 
                 # Convert to base64
                 stream = MemoryStream()

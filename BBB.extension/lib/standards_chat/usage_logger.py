@@ -10,6 +10,7 @@ import time
 import base64
 from datetime import datetime, timedelta
 import hashlib
+from standards_chat.utils import safe_print, safe_str
 
 
 class UsageLogger:
@@ -64,7 +65,8 @@ class UsageLogger:
         self.user_id = self._get_anonymous_user_id()
     
     def log_interaction(self, query, response_preview, source_count, 
-                       duration_seconds, revit_context=None, session_id=None, screenshot_base64=None):
+                       duration_seconds, revit_context=None, session_id=None, screenshot_base64=None, source_urls=None,
+                       input_tokens=0, output_tokens=0, ai_model=None):
         """
         Log a chat interaction
         
@@ -76,6 +78,10 @@ class UsageLogger:
             revit_context: Dict of Revit context (optional)
             session_id: Unique session identifier
             screenshot_base64: Base64 encoded screenshot string
+            source_urls: List of source URLs
+            input_tokens: Number of input tokens
+            output_tokens: Number of output tokens
+            ai_model: Claude model used (e.g., 'claude-3-5-sonnet-20241022')
         """
         timestamp = datetime.utcnow().isoformat()
         
@@ -88,7 +94,12 @@ class UsageLogger:
             'query_length': len(query),
             'response_preview': response_preview[:100] if response_preview else '',
             'source_count': source_count,
+            'source_urls': source_urls or [],
             'duration_seconds': round(duration_seconds, 2),
+            'input_tokens': input_tokens,
+            'output_tokens': output_tokens,
+            'total_tokens': input_tokens + output_tokens,
+            'ai_model': ai_model,
             'has_revit_context': revit_context is not None
         }
         
@@ -122,7 +133,12 @@ class UsageLogger:
                 'query': query,
                 'response': response_preview, # Full response requested
                 'source_count': source_count,
+                'source_urls': source_urls or [],
                 'duration_seconds': round(duration_seconds, 2),
+                'input_tokens': input_tokens,
+                'output_tokens': output_tokens,
+                'total_tokens': input_tokens + output_tokens,
+                'ai_model': ai_model,
                 'model_name': revit_context.get('project_name') if revit_context else None,
                 'view_name': revit_context.get('active_view') if revit_context else None,
                 'selection_count': revit_context.get('selection_count', 0) if revit_context else 0,
@@ -135,10 +151,20 @@ class UsageLogger:
     def _write_local_log(self, entry):
         """Write entry to local log file"""
         try:
-            with open(self.local_log_file, 'a') as f:
-                f.write(json.dumps(entry) + '\n')
+            # Force utf-8 encoding for file open
+            import io
+            with io.open(self.local_log_file, 'a', encoding='utf-8') as f:
+                # Ensure json dump produces ascii-safe string
+                json_str = json.dumps(entry, ensure_ascii=True)
+                f.write(unicode(json_str) + u'\n')
         except Exception as e:
-            print("Error writing local log: {}".format(str(e)))
+            # Fallback for severe encoding issues
+            try:
+                with open(self.local_log_file, 'a') as f:
+                    # Fallback to ascii-escaped json
+                    f.write(json.dumps(entry, ensure_ascii=True) + '\n')
+            except Exception:
+                pass # Give up silencing error to avoid crashing app
     
     def _write_central_log(self, entry, username, session_id):
         """Write entry to central network location (session specific file)"""
@@ -153,6 +179,10 @@ class UsageLogger:
                 except:
                     pass
             
+            # Ensure session_id is usable (fallback to timestamp if None)
+            if not session_id:
+                session_id = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+
             # Create session filename: YYYY-MM-DD_Username_SessionID.json
             date_str = datetime.now().strftime('%Y-%m-%d')
             safe_username = "".join([c for c in username if c.isalnum() or c in (' ', '.', '_')]).strip()
@@ -161,11 +191,20 @@ class UsageLogger:
             
             # Append to session file (list of objects)
             # Using JSONL is safer for appending and PowerBI supports it
-            with open(file_path, 'a') as f:
-                f.write(json.dumps(entry) + '\n')
+            import io
+            with io.open(file_path, 'a', encoding='utf-8') as f:
+                json_str = json.dumps(entry, ensure_ascii=True)
+                f.write(unicode(json_str) + u'\n')
                 
         except Exception as e:
-            print("Could not write to central log: {}".format(str(e)))
+            # Fallback
+            try:
+                # Use standard open with ascii escaping
+                file_path = os.path.join(self.central_log_dir, filename)
+                with open(file_path, 'a') as f:
+                     f.write(json.dumps(entry, ensure_ascii=True) + '\n')
+            except:
+                safe_print("Could not write to central log: {}".format(safe_str(e)))
 
     def _save_screenshot(self, base64_str, session_id, timestamp):
         """Save screenshot to central directory"""
@@ -188,7 +227,7 @@ class UsageLogger:
                 
             return file_path
         except Exception as e:
-            print("Error saving screenshot: {}".format(str(e)))
+            safe_print("Error saving screenshot: {}".format(safe_str(e)))
             return None
     
     def _get_anonymous_user_id(self):
@@ -306,6 +345,6 @@ class UsageLogger:
             )
             
         except Exception as e:
-            print("Error calculating stats: {}".format(str(e)))
+            safe_print("Error calculating stats: {}".format(safe_str(e)))
         
         return stats
