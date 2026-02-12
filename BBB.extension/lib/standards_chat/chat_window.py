@@ -672,9 +672,12 @@ class StandardsChatWindow(Window):
         
         # Try to load SharePoint icon
         sp_icon_bitmap = None
+        pdf_icon_bitmap = None
         try:
             script_dir = os.path.dirname(__file__)
             lib_dir = os.path.dirname(script_dir)
+            
+            # Load SharePoint icon
             sp_icon_path = os.path.join(lib_dir, 'ui', 'sharepoint_icon.png')
             if os.path.exists(sp_icon_path):
                 sp_icon_bitmap = BitmapImage()
@@ -682,6 +685,15 @@ class StandardsChatWindow(Window):
                 sp_icon_bitmap.UriSource = Uri("file:///" + sp_icon_path.replace("\\", "/"))
                 sp_icon_bitmap.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad
                 sp_icon_bitmap.EndInit()
+            
+            # Load PDF icon
+            pdf_icon_path = os.path.join(lib_dir, 'ui', 'pdf_icon.png')
+            if os.path.exists(pdf_icon_path):
+                pdf_icon_bitmap = BitmapImage()
+                pdf_icon_bitmap.BeginInit()
+                pdf_icon_bitmap.UriSource = Uri("file:///" + pdf_icon_path.replace("\\", "/"))
+                pdf_icon_bitmap.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad
+                pdf_icon_bitmap.EndInit()
         except:
             pass
         
@@ -737,10 +749,18 @@ class StandardsChatWindow(Window):
             
             tb.Inlines.Add(link)
             
-            # Add SharePoint icon if available
-            if sp_icon_bitmap:
+            # Select appropriate icon based on category
+            category = source.get('category', '')
+            icon_bitmap = None
+            if 'PDF' in category:
+                icon_bitmap = pdf_icon_bitmap
+            else:
+                icon_bitmap = sp_icon_bitmap
+            
+            # Add icon if available
+            if icon_bitmap:
                 img = Image()
-                img.Source = sp_icon_bitmap
+                img.Source = icon_bitmap
                 img.Width = 10
                 img.Height = 10
                 # img.Margin = Thickness(4, 0, 0, 0)

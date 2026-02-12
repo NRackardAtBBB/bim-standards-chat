@@ -804,6 +804,187 @@ class SharePointClient:
             self._log_debug("Error fetching page content by ID {}: {}".format(page_id, str(e)))
             return ""
 
+    def get_all_pdfs_metadata(self):
+        """
+        Get metadata for all PDF files in the site's document libraries
+        Returns list of dicts with name, url, size, downloadUrl, lastModifiedDateTime
+        """
+        self._log_debug("get_all_pdfs_metadata started")
+        try:
+            self._get_access_token()
+            site_id = self._get_site_id()
+            
+            pdfs = []
+            
+            # Query the drive root for PDF files recursively
+            # Start with root folder
+            url = "{}/sites/{}/drive/root/children".format(self.base_url, site_id)
+            self._log_debug("Querying drive for PDFs: {}".format(url))
+            
+            folders_to_process = [url]
+            
+            while folders_to_process:
+                current_url = folders_to_process.pop(0)
+                
+                try:
+                    if USE_DOTNET:
+                        request = HttpRequestMessage(HttpMethod.Get, System.String(current_url))
+                        response = self.client.SendAsync(request).Result
+                        
+                        if not response.IsSuccessStatusCode:
+                            self._log_debug("Failed to list drive items: {}".format(response.StatusCode))
+                            continue
+                            
+                        content = response.Content.ReadAsStringAsync().Result
+                        data = json.loads(content)
+                    else:
+                        response = self.session.get(current_url)
+                        
+                        if not response.ok:
+                            self._log_debug("Failed to list drive items: {}".format(response.status_code))
+                            continue
+                            
+                        data = response.json()
+                    
+                    items = data.get('value', [])
+                    
+                    for item in items:
+                        # Check if it's a folder
+                        if 'folder' in item:
+                            # Add subfolder to processing queue
+                            item_id = item.get('id')
+                            if item_id:
+                                subfolder_url = "{}/sites/{}/drive/items/{}/children".format(
+                                    self.base_url, site_id, item_id
+                                )
+                                folders_to_process.append(subfolder_url)
+                        
+                        # Check if it's a PDF file
+                        elif 'file' in item:
+                            name = item.get('name', '').lower()
+                            if name.endswith('.pdf'):
+                                # Get size and check limit
+                                size = item.get('size', 0)
+                                max_size = self.config.get('sharepoint', 'pdf_max_size_mb', default=50)
+                                max_size_bytes = max_size * 1024 * 1024
+                                
+                                if size > max_size_bytes:
+                                    self._log_debug("Skipping large PDF: {} ({} MB)".format(
+                                        item.get('name'), size / (1024 * 1024)
+                                    ))
+                                    continue
+                                
+                                pdf_info = {
+                                    'id': item.get('id'),
+                                    'name': item.get('name'),
+                                    'webUrl': item.get('webUrl'),
+                                    'size': size,
+                                    'downloadUrl': item.get('@microsoft.graph.downloadUrl'),
+                                    'lastModifiedDateTime': item.get('lastModifiedDateTime')
+                                }
+                                pdfs.append(pdf_info)
+                                
+                except Exception as e:
+                    self._log_debug("Error processing folder {}: {}".format(current_url, str(e)))
+                    continue
+            
+            self._log_debug("Found {} PDFs for indexing".format(len(pdfs)))
+            return pdfs
+            
+        except Exception as e:
+            self._log_debug("Error getting PDFs metadata: {}".format(str(e)))
+            return []
+
+    def _download_pdf_file(self, pdf_metadata):
+        """
+        Download PDF file content from SharePoint
+        
+        Args:
+            pdf_metadata: Dict with 'downloadUrl' key from get_all_pdfs_metadata
+            
+        Returns:
+            bytes: PDF file content, or None on error
+        """
+        download_url = pdf_metadata.get('downloadUrl')
+        if not download_url:
+            self._log_debug("No download URL for PDF: {}".format(pdf_metadata.get('name')))
+            return None
+        
+        try:
+            self._log_debug("Downloading PDF: {}".format(pdf_metadata.get('name')))
+            
+            if USE_DOTNET:
+                # Use .NET HttpClient - download URL doesn't need auth token
+                request = HttpRequestMessage(HttpMethod.Get, System.String(download_url))
+                response = self.client.SendAsync(request).Result
+                
+                if not response.IsSuccessStatusCode:
+                    self._log_debug("Failed to download PDF: {}".format(response.StatusCode))
+                    return None
+                
+                # Read as byte array
+                byte_array = response.Content.ReadAsByteArrayAsync().Result
+                # Convert .NET byte array to Python bytes
+                pdf_bytes = bytes(byte_array)
+                return pdf_bytes
+            else:
+                # Use Python requests
+                response = self.session.get(download_url, timeout=30)
+                
+                if not response.ok:
+                    self._log_debug("Failed to download PDF: {}".format(response.status_code))
+                    return None
+                
+                return response.content
+                
+        except Exception as e:
+            self._log_debug("Error downloading PDF {}: {}".format(pdf_metadata.get('name'), str(e)))
+            return None
+
+    def _extract_text_from_pdf(self, pdf_bytes, max_pages=100):
+        """
+        Extract text content from PDF bytes
+        
+        Args:
+            pdf_bytes: PDF file content as bytes
+            max_pages: Maximum number of pages to process (default 100)
+            
+        Returns:
+            str: Extracted text content, or empty string on error
+        """
+        if not pdf_bytes:
+            return ""
+        
+        try:
+            import io
+            from pypdf import PdfReader
+            
+            reader = PdfReader(io.BytesIO(pdf_bytes))
+            page_limit = min(len(reader.pages), max_pages)
+            
+            self._log_debug("Extracting text from {} pages".format(page_limit))
+            
+            text_parts = []
+            for i in range(page_limit):
+                try:
+                    page_text = reader.pages[i].extract_text()
+                    if page_text and page_text.strip():
+                        text_parts.append(page_text)
+                except Exception as e:
+                    # Log and continue with other pages
+                    self._log_debug("Failed to extract page {}: {}".format(i, str(e)))
+                    continue
+            
+            if not text_parts:
+                self._log_debug("No text extracted from PDF")
+                return ""
+            
+            return "\n\n".join(text_parts)
+            
+        except Exception as e:
+            self._log_debug("PDF extraction failed: {}".format(str(e)))
+            return ""
+
     def sync_to_vector_db(self, vector_db_client, progress_callback=None):
         """
         Sync all SharePoint pages to the vector database.
@@ -826,10 +1007,22 @@ class SharePointClient:
             pages = self.get_all_pages_metadata()
             total_pages = len(pages)
             
-            if total_pages == 0:
+            # Check if PDFs should be included
+            include_pdfs = self.config.get('sharepoint', 'include_pdfs', default=True)
+            
+            # Get all PDFs if enabled
+            pdfs = []
+            if include_pdfs:
+                if progress_callback:
+                    progress_callback("Fetching PDF files...", 5, 100)
+                pdfs = self.get_all_pdfs_metadata()
+            
+            total_pdfs = len(pdfs)
+            
+            if total_pages == 0 and total_pdfs == 0:
                 return {
                     'success': False,
-                    'error': 'No pages found to index',
+                    'error': 'No pages or PDFs found to index',
                     'documents': 0,
                     'chunks': 0,
                     'timestamp': None
@@ -894,6 +1087,60 @@ class SharePointClient:
                     self._log_debug("Error processing page {}: {}".format(page.get('title', 'Unknown'), str(e)))
                     continue
             
+            # Process PDFs if enabled
+            pdf_success_count = 0
+            pdf_failed_count = 0
+            
+            if include_pdfs and pdfs:
+                if progress_callback:
+                    progress_callback("Processing PDF files...", 40, 100)
+                
+                for i, pdf in enumerate(pdfs):
+                    try:
+                        pdf_name = pdf.get('name', 'Unknown')75, 100)
+            
+            # Clear existing collection
+            vector_db_client.clear_collection()
+            
+            if progress_callback:
+                progress_callback("Generating embeddings and indexing...", 8mat(pdf_name))
+                            pdf_failed_count += 1
+                            continue
+                        
+                        # Extract text
+                        pdf_content = self._extract_text_from_pdf(pdf_bytes)
+                        
+                        # Even if extraction fails, index by filename
+                        if not pdf_content or not pdf_content.strip():
+                            self._log_debug("No text extracted from PDF: {}".format(pdf_name))
+                            # Use filename as searchable content
+                            pdf_content = pdf_name
+                        
+                        documents.append({
+                            'id': pdf.get('webUrl'),  # Use URL as unique ID
+                            'title': pdf_name,
+                            'url': pdf.get('webUrl'),
+                            'content': pdf_content,
+                            'category': 'PDF Document',
+                            'last_updated': pdf.get('lastModifiedDateTime', datetime.now().isoformat())
+                        })
+                        
+                        pdf_success_count += 1
+                        
+                        # Update progress
+                        if progress_callback:
+                            progress_percent = 40 + int((i + 1) / float(total_pdfs) * 35)
+                            progress_callback(
+                                "Processed {}/{} PDFs".format(i + 1, total_pdfs),
+                                progress_percent,
+                                100
+                            )
+                    
+                    except Exception as e:
+                        self._log_debug("Error processing PDF {}: {}".format(pdf.get('name', 'Unknown'), str(e)))
+                        pdf_failed_count += 1
+                        continue
+            
             if not documents:
                 return {
                     'success': False,
@@ -923,12 +1170,16 @@ class SharePointClient:
             self.config.set_config('vector_search.last_sync_timestamp', sync_timestamp)
             self.config.set_config('vector_search.indexed_document_count', index_stats['documents'])
             self.config.set_config('vector_search.indexed_chunk_count', index_stats['chunks'])
+            self.config.set_config('vector_search.indexed_pdf_count', pdf_success_count)
+            self.config.set_config('vector_search.failed_pdf_count', pdf_failed_count)
             self.config.save()
             
             return {
                 'success': True,
                 'documents': index_stats['documents'],
                 'chunks': index_stats['chunks'],
+                'pdf_count': pdf_success_count,
+                'pdf_failed': pdf_failed_count,
                 'timestamp': sync_timestamp
             }
             

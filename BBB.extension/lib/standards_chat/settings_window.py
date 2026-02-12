@@ -210,8 +210,22 @@ class SettingsWindow(forms.WPFWindow):
         last_sync = vs_config.get('last_sync_timestamp')
         doc_count = vs_config.get('indexed_document_count', 0)
         chunk_count = vs_config.get('indexed_chunk_count', 0)
+        pdf_count = vs_config.get('indexed_pdf_count', 0)
+        pdf_failed = vs_config.get('failed_pdf_count', 0)
         
-        self.indexed_docs_text.Text = str(doc_count)
+        # Calculate page count (total docs minus PDFs)
+        page_count = doc_count - pdf_count
+        
+        # Display document counts with breakdown
+        if pdf_count > 0:
+            doc_text = "{} ({} pages, {} PDFs".format(doc_count, page_count, pdf_count)
+            if pdf_failed > 0:
+                doc_text += ", {} failed".format(pdf_failed)
+            doc_text += ")"
+            self.indexed_docs_text.Text = doc_text
+        else:
+            self.indexed_docs_text.Text = str(doc_count)
+        
         self.indexed_chunks_text.Text = str(chunk_count)
         
         if last_sync:
