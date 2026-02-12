@@ -985,6 +985,153 @@ class SharePointClient:
             self._log_debug("PDF extraction failed: {}".format(str(e)))
             return ""
 
+    def get_training_transcripts(self):
+        """
+        Get metadata for training video transcripts (.txt files) and their associated .mp4 video files.
+        
+        Returns list of dicts with:
+            - transcript_name: Name of the .txt file
+            - video_name: Name of the matching .mp4 file
+            - video_url: SharePoint URL to the .mp4 video file
+            - transcript_download_url: Download URL for the .txt file
+            - last_modified: Last modified timestamp
+        """
+        self._log_debug("get_training_transcripts started")
+        try:
+            self._get_access_token()
+            site_id = self._get_site_id()
+            
+            # Get the configured training videos folder path
+            folder_path = self.config.get('sharepoint', 'training_videos_folder_path', 
+                                         default='Training/BIM Pure Videos')
+            
+            self._log_debug("Scanning folder for training transcripts: {}".format(folder_path))
+            
+            # Build URL to query the specific folder
+            url = "{}/sites/{}/drive/root:/{}:/children".format(self.base_url, site_id, folder_path)
+            
+            transcripts = []
+            folders_to_process = [url]
+            
+            while folders_to_process:
+                current_url = folders_to_process.pop(0)
+                
+                try:
+                    if USE_DOTNET:
+                        request = HttpRequestMessage(HttpMethod.Get, System.String(current_url))
+                        response = self.client.SendAsync(request).Result
+                        
+                        if not response.IsSuccessStatusCode:
+                            self._log_debug("Failed to list training folder items: {}".format(response.StatusCode))
+                            continue
+                            
+                        content = response.Content.ReadAsStringAsync().Result
+                        data = json.loads(content)
+                    else:
+                        response = self.session.get(current_url)
+                        
+                        if not response.ok:
+                            self._log_debug("Failed to list training folder items: {}".format(response.status_code))
+                            continue
+                            
+                        data = response.json()
+                    
+                    items = data.get('value', [])
+                    
+                    # First pass - collect all .txt and .mp4 files by folder
+                    folder_files = {}
+                    
+                    for item in items:
+                        # Check if it's a folder
+                        if 'folder' in item:
+                            # Add subfolder to processing queue
+                            item_id = item.get('id')
+                            if item_id:
+                                subfolder_url = "{}/sites/{}/drive/items/{}/children".format(
+                                    self.base_url, site_id, item_id
+                                )
+                                folders_to_process.append(subfolder_url)
+                        
+                        # Check if it's a file
+                        elif 'file' in item:
+                            name = item.get('name', '')
+                            if name.endswith('.txt') or name.endswith('.mp4'):
+                                folder_files[name] = item
+                    
+                    # Second pass - match .txt files with .mp4 files
+                    for filename, item in folder_files.items():
+                        if filename.endswith('.txt'):
+                            # Look for matching .mp4 file
+                            base_name = filename[:-4]  # Remove .txt extension
+                            video_filename = base_name + '.mp4'
+                            
+                            if video_filename in folder_files:
+                                video_item = folder_files[video_filename]
+                                
+                                transcript_info = {
+                                    'transcript_id': item.get('id'),
+                                    'transcript_name': filename,
+                                    'video_id': video_item.get('id'),
+                                    'video_name': video_filename,
+                                    'video_url': video_item.get('webUrl'),
+                                    'transcript_download_url': item.get('@microsoft.graph.downloadUrl'),
+                                    'last_modified': item.get('lastModifiedDateTime'),
+                                    'size': item.get('size', 0)
+                                }
+                                transcripts.append(transcript_info)
+                            else:
+                                self._log_debug("No matching video found for transcript: {}".format(filename))
+                
+                except Exception as e:
+                    self._log_debug("Error processing training folder {}: {}".format(current_url, str(e)))
+                    continue
+            
+            self._log_debug("Found {} training video transcripts for indexing".format(len(transcripts)))
+            return transcripts
+            
+        except Exception as e:
+            self._log_debug("Error getting training transcripts: {}".format(str(e)))
+            return []
+
+    def _download_transcript(self, transcript_metadata):
+        """
+        Download transcript text file content from SharePoint
+        
+        Args:
+            transcript_metadata: Dict with transcript_download_url key
+            
+        Returns:
+            str: Transcript text content, or empty string on error
+        """
+        try:
+            download_url = transcript_metadata.get('transcript_download_url')
+            if not download_url:
+                self._log_debug("No download URL for transcript")
+                return ""
+            
+            if USE_DOTNET:
+                request = HttpRequestMessage(HttpMethod.Get, System.String(download_url))
+                response = self.client.SendAsync(request).Result
+                
+                if not response.IsSuccessStatusCode:
+                    self._log_debug("Failed to download transcript: {}".format(response.StatusCode))
+                    return ""
+                
+                content = response.Content.ReadAsStringAsync().Result
+                return content
+            else:
+                response = self.session.get(download_url)
+                
+                if not response.ok:
+                    self._log_debug("Failed to download transcript: {}".format(response.status_code))
+                    return ""
+                
+                return response.text
+                
+        except Exception as e:
+            self._log_debug("Error downloading transcript: {}".format(str(e)))
+            return ""
+
     def sync_to_vector_db(self, vector_db_client, progress_callback=None):
         """
         Sync all SharePoint pages to the vector database.
@@ -1019,10 +1166,22 @@ class SharePointClient:
             
             total_pdfs = len(pdfs)
             
-            if total_pages == 0 and total_pdfs == 0:
+            # Check if training videos should be included
+            include_training_videos = self.config.get('sharepoint', 'include_training_videos', default=True)
+            
+            # Get all training video transcripts if enabled
+            training_videos = []
+            if include_training_videos:
+                if progress_callback:
+                    progress_callback("Fetching training video transcripts...", 7, 100)
+                training_videos = self.get_training_transcripts()
+            
+            total_videos = len(training_videos)
+            
+            if total_pages == 0 and total_pdfs == 0 and total_videos == 0:
                 return {
                     'success': False,
-                    'error': 'No pages or PDFs found to index',
+                    'error': 'No pages, PDFs, or training videos found to index',
                     'documents': 0,
                     'chunks': 0,
                     'timestamp': None
@@ -1141,6 +1300,52 @@ class SharePointClient:
                         pdf_failed_count += 1
                         continue
             
+            # Process training video transcripts if enabled
+            video_success_count = 0
+            video_failed_count = 0
+            
+            if include_training_videos and training_videos:
+                if progress_callback:
+                    progress_callback("Processing training video transcripts...", 75, 100)
+                
+                for i, video_info in enumerate(training_videos):
+                    try:
+                        video_name = video_info.get('video_name', 'Unknown')
+                        self._log_debug("Processing training video {}/{}: {}".format(i + 1, total_videos, video_name))
+                        
+                        # Download transcript text
+                        transcript_content = self._download_transcript(video_info)
+                        if not transcript_content or not transcript_content.strip():
+                            self._log_debug("Failed to download transcript for: {}".format(video_name))
+                            video_failed_count += 1
+                            continue
+                        
+                        # Create document with video URL as reference
+                        documents.append({
+                            'id': video_info.get('video_url'),  # Use video URL as unique ID
+                            'title': video_name.replace('.mp4', ''),  # Clean title
+                            'url': video_info.get('video_url'),  # Reference points to video, not transcript
+                            'content': transcript_content,
+                            'category': 'Training Video',
+                            'last_updated': video_info.get('last_modified', datetime.now().isoformat())
+                        })
+                        
+                        video_success_count += 1
+                        
+                        # Update progress
+                        if progress_callback:
+                            progress_percent = 75 + int((i + 1) / float(total_videos) * 15)
+                            progress_callback(
+                                "Processed {}/{} training videos".format(i + 1, total_videos),
+                                progress_percent,
+                                100
+                            )
+                    
+                    except Exception as e:
+                        self._log_debug("Error processing training video {}: {}".format(video_info.get('video_name', 'Unknown'), str(e)))
+                        video_failed_count += 1
+                        continue
+            
             if not documents:
                 return {
                     'success': False,
@@ -1151,13 +1356,13 @@ class SharePointClient:
                 }
             
             if progress_callback:
-                progress_callback("Clearing existing index...", 75, 100)
+                progress_callback("Clearing existing index...", 90, 100)
             
             # Clear existing collection
             vector_db_client.clear_collection()
             
             if progress_callback:
-                progress_callback("Generating embeddings and indexing...", 80, 100)
+                progress_callback("Generating embeddings and indexing...", 95, 100)
             
             # Index documents (this will chunk them internally)
             index_stats = vector_db_client.index_documents(documents)
@@ -1172,6 +1377,8 @@ class SharePointClient:
             self.config.set_config('vector_search.indexed_chunk_count', index_stats['chunks'])
             self.config.set_config('vector_search.indexed_pdf_count', pdf_success_count)
             self.config.set_config('vector_search.failed_pdf_count', pdf_failed_count)
+            self.config.set_config('vector_search.indexed_video_count', video_success_count)
+            self.config.set_config('vector_search.failed_video_count', video_failed_count)
             self.config.save()
             
             return {
@@ -1180,6 +1387,8 @@ class SharePointClient:
                 'chunks': index_stats['chunks'],
                 'pdf_count': pdf_success_count,
                 'pdf_failed': pdf_failed_count,
+                'video_count': video_success_count,
+                'video_failed': video_failed_count,
                 'timestamp': sync_timestamp
             }
             

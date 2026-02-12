@@ -673,6 +673,7 @@ class StandardsChatWindow(Window):
         # Try to load SharePoint icon
         sp_icon_bitmap = None
         pdf_icon_bitmap = None
+        video_icon_bitmap = None
         try:
             script_dir = os.path.dirname(__file__)
             lib_dir = os.path.dirname(script_dir)
@@ -694,6 +695,15 @@ class StandardsChatWindow(Window):
                 pdf_icon_bitmap.UriSource = Uri("file:///" + pdf_icon_path.replace("\\", "/"))
                 pdf_icon_bitmap.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad
                 pdf_icon_bitmap.EndInit()
+            
+            # Load video icon
+            video_icon_path = os.path.join(lib_dir, 'ui', 'video_icon.png')
+            if os.path.exists(video_icon_path):
+                video_icon_bitmap = BitmapImage()
+                video_icon_bitmap.BeginInit()
+                video_icon_bitmap.UriSource = Uri("file:///" + video_icon_path.replace("\\", "/"))
+                video_icon_bitmap.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad
+                video_icon_bitmap.EndInit()
         except:
             pass
         
@@ -754,6 +764,8 @@ class StandardsChatWindow(Window):
             icon_bitmap = None
             if 'PDF' in category:
                 icon_bitmap = pdf_icon_bitmap
+            elif 'Training Video' in category or 'Video' in category:
+                icon_bitmap = video_icon_bitmap
             else:
                 icon_bitmap = sp_icon_bitmap
             

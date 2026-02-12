@@ -212,15 +212,22 @@ class SettingsWindow(forms.WPFWindow):
         chunk_count = vs_config.get('indexed_chunk_count', 0)
         pdf_count = vs_config.get('indexed_pdf_count', 0)
         pdf_failed = vs_config.get('failed_pdf_count', 0)
+        video_count = vs_config.get('indexed_video_count', 0)
+        video_failed = vs_config.get('failed_video_count', 0)
         
-        # Calculate page count (total docs minus PDFs)
-        page_count = doc_count - pdf_count
+        # Calculate page count (total docs minus PDFs and videos)
+        page_count = doc_count - pdf_count - video_count
         
         # Display document counts with breakdown
-        if pdf_count > 0:
-            doc_text = "{} ({} pages, {} PDFs".format(doc_count, page_count, pdf_count)
-            if pdf_failed > 0:
-                doc_text += ", {} failed".format(pdf_failed)
+        if pdf_count > 0 or video_count > 0:
+            doc_text = "{} ({} pages".format(doc_count, page_count)
+            if pdf_count > 0:
+                doc_text += ", {} PDFs".format(pdf_count)
+            if video_count > 0:
+                doc_text += ", {} videos".format(video_count)
+            if pdf_failed > 0 or video_failed > 0:
+                total_failed = pdf_failed + video_failed
+                doc_text += ", {} failed".format(total_failed)
             doc_text += ")"
             self.indexed_docs_text.Text = doc_text
         else:
