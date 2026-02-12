@@ -1003,7 +1003,7 @@ class SharePointClient:
             
             # Get the configured training videos folder path
             folder_path = self.config.get('sharepoint', 'training_videos_folder_path', 
-                                         default='Documents/Training/BIM Pure Videos')
+                                         default='Training/BIM Pure Videos')
             
             self._log_debug("Scanning folder for training transcripts: {}".format(folder_path))
             
