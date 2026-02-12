@@ -42,7 +42,9 @@ Get up and running in 10 minutes!
 
 1. Navigate to: `%APPDATA%\pyRevit\Extensions\BBB.extension\config\`
 
-2. Edit `api_keys.json`:
+2. Copy `api_keys.example.json` to `api_keys.json`
+
+3. Edit `api_keys.json`:
    ```json
    {
      "notion_api_key": "secret_YOUR_KEY_HERE",
@@ -50,7 +52,7 @@ Get up and running in 10 minutes!
    }
    ```
 
-3. Edit `config.json` - find `database_id`:
+4. Edit `config.json` - find `database_id`:
    ```json
    "notion": {
      "database_id": "YOUR_32_CHAR_DATABASE_ID",

@@ -57,11 +57,15 @@ The vector search feature enables semantic search of SharePoint content using AI
 }
 ```
 
-### api_keys.json
+### api_keys.json (local, not committed)
 
+Copy the template file and add your key:
+
+1. Copy [BBB.extension/config/api_keys.example.json](BBB.extension/config/api_keys.example.json) to `BBB.extension/config/api_keys.json`
+2. Update:
 ```json
 {
-  "openai_api_key": "sk-proj-..."
+   "openai_api_key": "sk-proj-YOUR_KEY_HERE"
 }
 ```
 
@@ -111,7 +115,7 @@ If auto-detection fails, uncomment lines 16-17 and manually set your paths.
    "developer_whitelist": ["nrackard", "yourusername"]
    ```
 
-2. **Add OpenAI API key** to [api_keys.json](BBB.extension/config/api_keys.json):
+2. **Add OpenAI API key** to [api_keys.json](BBB.extension/config/api_keys.json) (create it from the example template):
    ```json
    "openai_api_key": "sk-proj-YOUR_KEY_HERE"
    ```
@@ -229,7 +233,7 @@ Verify:
 ## Files Modified
 
 - [config.json](BBB.extension/config/config.json) - Added vector_search section
-- [api_keys.json](BBB.extension/config/api_keys.json) - Added openai_api_key
+- [api_keys.example.json](BBB.extension/config/api_keys.example.json) - Template for local API keys
 - [vector_db_client.py](BBB.extension/lib/standards_chat/vector_db_client.py) - New module
 - [sharepoint_client.py](BBB.extension/lib/standards_chat/sharepoint_client.py) - Added sync_to_vector_db()
 - [config_manager.py](BBB.extension/lib/standards_chat/config_manager.py) - Added get_config(), set_config(), save()

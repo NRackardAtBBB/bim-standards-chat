@@ -60,6 +60,7 @@ Response with Citations
 
 3. **Configure API Keys**:
    - Navigate to `BBB.extension\config\`
+   - Copy `api_keys.example.json` to `api_keys.json`
    - Edit `api_keys.json` with your credentials:
      ```json
      {
@@ -238,6 +239,7 @@ BBB.extension/
 │       └── chat_window.xaml        # WPF UI definition
 └── config/
     ├── config.json                 # Application settings
+    ├── api_keys.example.json      # API credentials template
     ├── api_keys.json              # API credentials (git-ignored)
     └── .gitignore
 ```

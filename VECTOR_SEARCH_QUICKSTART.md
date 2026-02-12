@@ -57,12 +57,15 @@ The [vector_db_client.py](BBB.extension/lib/standards_chat/vector_db_client.py) 
 
 You don't need to modify anything unless the auto-detection fails. If you get import errors, uncomment lines 16-17 in vector_db_client.py and add your specific paths from Step 1d.
 
-## Step 3: Verify Your OpenAI API Key
+## Step 3: Configure Your OpenAI API Key
 
-The key is already in [api_keys.json](BBB.extension/config/api_keys.json):
+Copy the template and add your key (do not commit `api_keys.json`):
+
+1. Copy [BBB.extension/config/api_keys.example.json](BBB.extension/config/api_keys.example.json) to `BBB.extension/config/api_keys.json`
+2. Update the `openai_api_key` value:
 ```json
 {
-  "openai_api_key": "sk-proj-X8h9_MJesz8w..."
+  "openai_api_key": "sk-proj-YOUR_KEY_HERE"
 }
 ```
 

@@ -150,9 +150,9 @@ Set up billing alerts in the Anthropic console to monitor usage.
 
 1. Navigate to: `%APPDATA%\pyRevit\Extensions\BBB.extension\config\`
 
-2. Open `api_keys.json` in a text editor
+2. Copy `api_keys.example.json` to `api_keys.json`
 
-3. Replace placeholder values:
+3. Open `api_keys.json` in a text editor and replace placeholder values:
    ```json
    {
      "notion_api_key": "secret_your_actual_key_from_part2",
