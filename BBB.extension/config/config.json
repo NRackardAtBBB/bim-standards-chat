@@ -42,15 +42,15 @@
   "vector_search": {
     "hybrid_search_weight_semantic": 0.7,
     "developer_mode": true,
-    "last_sync_timestamp": "2026-02-12T14:27:30.905397",
+    "last_sync_timestamp": "2026-02-12T14:31:41.427594",
     "embedding_model": "text-embedding-3-small",
     "hybrid_search_weight_keyword": 0.3,
     "embedding_provider": "openai",
     "similarity_threshold": 0.5,
     "embedding_dimensions": 1536,
-    "indexed_chunk_count": 291,
+    "indexed_chunk_count": 436,
     "db_path": "vector_db",
-    "indexed_document_count": 82,
+    "indexed_document_count": 157,
     "max_results": 10,
     "chunk_size": 800,
     "developer_whitelist": [
@@ -59,7 +59,7 @@
     "chunk_overlap": 150,
     "indexed_pdf_count": 36,
     "failed_pdf_count": 0,
-    "indexed_video_count": 0,
+    "indexed_video_count": 75,
     "failed_video_count": 0
   },
   "sharepoint": {
