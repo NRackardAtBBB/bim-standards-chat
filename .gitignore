@@ -2,6 +2,7 @@
 
 # API Keys and sensitive configuration
 config/api_keys.json
+BBB.extension/config/vector_db/
 
 # Logs
 *.log
