@@ -42,7 +42,7 @@
   "vector_search": {
     "hybrid_search_weight_semantic": 0.7,
     "developer_mode": true,
-    "last_sync_timestamp": "2026-02-12T13:54:39.983191",
+    "last_sync_timestamp": "2026-02-12T14:19:35.141802",
     "embedding_model": "text-embedding-3-small",
     "hybrid_search_weight_keyword": 0.3,
     "embedding_provider": "openai",
@@ -58,7 +58,9 @@
     ],
     "chunk_overlap": 150,
     "indexed_pdf_count": 36,
-    "failed_pdf_count": 0
+    "failed_pdf_count": 0,
+    "indexed_video_count": 0,
+    "failed_video_count": 0
   },
   "sharepoint": {
     "site_url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards",
@@ -71,7 +73,9 @@
     "site_id": "fc5e6d27-c959-415e-b0a8-eca5d2452de5",
     "include_pdfs": true,
     "pdf_max_size_mb": 50,
-    "pdf_extraction_timeout_seconds": 30
+    "pdf_extraction_timeout_seconds": 30,
+    "include_training_videos": true,
+    "training_videos_folder_path": "Documents/Training/BIM Pure Videos"
   },
   "anthropic": {
     "model": "claude-sonnet-4-5",
