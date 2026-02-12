@@ -1097,13 +1097,13 @@ class SharePointClient:
                 
                 for i, pdf in enumerate(pdfs):
                     try:
-                        pdf_name = pdf.get('name', 'Unknown')75, 100)
-            
-            # Clear existing collection
-            vector_db_client.clear_collection()
-            
-            if progress_callback:
-                progress_callback("Generating embeddings and indexing...", 8mat(pdf_name))
+                        pdf_name = pdf.get('name', 'Unknown')
+                        self._log_debug("Processing PDF {}/{}: {}".format(i + 1, total_pdfs, pdf_name))
+                        
+                        # Download PDF
+                        pdf_bytes = self._download_pdf_file(pdf)
+                        if not pdf_bytes:
+                            self._log_debug("Failed to download PDF: {}".format(pdf_name))
                             pdf_failed_count += 1
                             continue
                         
@@ -1151,13 +1151,13 @@ class SharePointClient:
                 }
             
             if progress_callback:
-                progress_callback("Clearing existing index...", 45, 100)
+                progress_callback("Clearing existing index...", 75, 100)
             
             # Clear existing collection
             vector_db_client.clear_collection()
             
             if progress_callback:
-                progress_callback("Generating embeddings and indexing...", 50, 100)
+                progress_callback("Generating embeddings and indexing...", 80, 100)
             
             # Index documents (this will chunk them internally)
             index_stats = vector_db_client.index_documents(documents)

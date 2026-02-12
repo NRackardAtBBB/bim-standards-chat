@@ -139,7 +139,12 @@ except ImportError:
 import base64
 import io
 import ctypes
-import System.Diagnostics
+
+try:
+    import System.Diagnostics
+except ImportError:
+    # Running in CPython, not IronPython
+    pass
 
 # Define RECT structure for Windows API
 class RECT(ctypes.Structure):
