@@ -248,29 +248,9 @@ Return ONLY the keywords separated by spaces. Do not include any other text.""".
         from standards_chat.utils import ascii_safe
         full_text = ascii_safe(full_text)
 
-        # Extract citations from the response
+        # Extract citations, renumber them sequentially in the text, and build source list
         cited_indices = self._extract_citations(full_text)
-        
-        # Filter sources to only include cited ones
-        sources = []
-        for i, page in enumerate(notion_pages, 1):  # 1-indexed to match citation numbers
-            if i in cited_indices:
-                sources.append({
-                    'title': page['title'],
-                    'url': page['url'],
-                    'category': page.get('category', 'General')
-                })
-        
-        # If no citations were found but we have pages, show top 3 as fallback
-        if not sources and notion_pages:
-            sources = [
-                {
-                    'title': page['title'],
-                    'url': page['url'],
-                    'category': page.get('category', 'General')
-                }
-                for page in notion_pages[:3]
-            ]
+        full_text, sources = self._renumber_citations(full_text, cited_indices, notion_pages)
         
         return {
             'text': full_text,
@@ -310,20 +290,51 @@ Return ONLY the keywords separated by spaces. Do not include any other text.""".
         # Extract response
         response_text = response_data['content'][0]['text']
         
-        # Extract citations from the response
+        # Extract citations, renumber them sequentially in the text, and build source list
         cited_indices = self._extract_citations(response_text)
+        response_text, sources = self._renumber_citations(response_text, cited_indices, notion_pages)
         
-        # Filter sources to only include cited ones
+        return {
+            'text': response_text,
+            'sources': sources,
+            'input_tokens': response_data.get('input_tokens', 0),
+            'output_tokens': response_data.get('output_tokens', 0),
+            'model': self.model
+        }
+    
+    def _renumber_citations(self, text, cited_indices, notion_pages):
+        """Renumber citations in text to be sequential starting from [1].
+        
+        If Claude cited documents [3] and [10], rewrites [3] -> [1] and [10] -> [2]
+        in the response text, and returns sources numbered to match.
+        
+        Returns:
+            tuple: (renumbered_text, sources_list)
+        """
+        import re
+        sorted_old = sorted(cited_indices)  # e.g. [3, 10]
+        mapping = {old: new for new, old in enumerate(sorted_old, 1)}  # {3:1, 10:2}
+        
+        # Replace [N] in text using the mapping; unrecognised numbers are left alone
+        def replacer(match):
+            num = int(match.group(1))
+            return u'[{}]'.format(mapping.get(num, num))
+        
+        renumbered_text = re.sub(u'\\[(\\d+)\\]', replacer, text)
+        
+        # Build source list in new sequential order
         sources = []
-        for i, page in enumerate(notion_pages, 1):  # 1-indexed to match citation numbers
-            if i in cited_indices:
+        for old_num in sorted_old:
+            idx = old_num - 1  # convert to 0-based
+            if 0 <= idx < len(notion_pages):
+                page = notion_pages[idx]
                 sources.append({
                     'title': page['title'],
                     'url': page['url'],
                     'category': page.get('category', 'General')
                 })
         
-        # If no citations were found but we have pages, show top 3 as fallback
+        # Fallback: no citations found — show top 3 docs unnumbered
         if not sources and notion_pages:
             sources = [
                 {
@@ -334,13 +345,7 @@ Return ONLY the keywords separated by spaces. Do not include any other text.""".
                 for page in notion_pages[:3]
             ]
         
-        return {
-            'text': response_text,
-            'sources': sources,
-            'input_tokens': response_data.get('input_tokens', 0),
-            'output_tokens': response_data.get('output_tokens', 0),
-            'model': self.model
-        }
+        return renumbered_text, sources
     
     def _extract_citations(self, text):
         """Extract citation numbers from AI response text
@@ -364,18 +369,22 @@ Return ONLY the keywords separated by spaces. Do not include any other text.""".
 
         # Add Notion standards
         if notion_pages:
-            context_parts.append(u"# Relevant BBB Standards\n")
+            context_parts.append(u"# Relevant BBB Documents\n")
             for i, page in enumerate(notion_pages, 1):
+                category = page.get('category', 'General')
+                # Map category to friendly type label
+                if category == 'Training Video':
+                    doc_type = 'Training Video'
+                elif category == 'PDF Document':
+                    doc_type = 'PDF Guide'
+                else:
+                    doc_type = 'Standards Page'
                 context_parts.append(
-                    u"## Standard {}: {}\n".format(i, ascii_safe(page['title']))
+                    u"## Document {}: {} [{}]\n".format(i, ascii_safe(page['title']), doc_type)
                 )
                 context_parts.append(
                     u"Source: {}\n".format(ascii_safe(page['url']))
                 )
-                if page.get('category'):
-                    context_parts.append(
-                        u"Category: {}\n".format(ascii_safe(page['category']))
-                    )
                 context_parts.append(u"\n{}\n\n".format(ascii_safe(page['content'])))
 
         # Add Revit context if available
@@ -410,12 +419,7 @@ Return ONLY the keywords separated by spaces. Do not include any other text.""".
 
 User Question: {}
 
-Please provide a helpful, detailed answer based on BBB's standards documentation above.
-IMPORTANT: When you reference information from a specific standard document, cite it using square brackets with the standard number, like [1] or [2]. These numbers correspond to the "Standard 1", "Standard 2", etc. listed above.
-For example: "According to the family naming standards [1], all families should..."
-Only cite sources that you actually reference in your answer.
-If multiple standards are relevant, explain how they work together.
-If the standards don't fully address the question, acknowledge this and provide your best guidance.""".format(
+Answer the question using the documents provided above. Cite sources inline using [1], [2] etc. matching the document numbers above. Only cite documents you actually draw from.""".format(
             context,
             ascii_safe(user_query)
         )

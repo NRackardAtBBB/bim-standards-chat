@@ -1,0 +1,305 @@
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Kodama - Terms of Use" 
+        Width="650" Height="650"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="NoResize"
+        Background="#F3F3F3">
+    
+    <Window.Resources>
+        <!-- Color Palette -->
+        <SolidColorBrush x:Key="PrimaryColor" Color="#0078D4"/>
+        <SolidColorBrush x:Key="PrimaryDarkColor" Color="#005A9E"/>
+        <SolidColorBrush x:Key="BackgroundColor" Color="#F3F3F3"/>
+        <SolidColorBrush x:Key="SurfaceColor" Color="#FFFFFF"/>
+        <SolidColorBrush x:Key="BorderColor" Color="#E0E0E0"/>
+        <SolidColorBrush x:Key="TextPrimaryColor" Color="#323130"/>
+        <SolidColorBrush x:Key="TextSecondaryColor" Color="#605E5C"/>
+        <SolidColorBrush x:Key="LinkColor" Color="#0078D4"/>
+
+        <!-- Base Text Style -->
+        <Style TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="Segoe UI"/>
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryColor}"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+        </Style>
+
+        <!-- Modern Button Style -->
+        <Style TargetType="Button">
+            <Setter Property="Padding" Value="20,10"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Margin" Value="5"/>
+            <Setter Property="Background" Value="{StaticResource SurfaceColor}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderColor}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" 
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="4" 
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#FAFAFA"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Primary Button Style -->
+        <Style x:Key="PrimaryButtonStyle" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Background" Value="{StaticResource PrimaryColor}"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" 
+                                CornerRadius="4" 
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="{StaticResource PrimaryDarkColor}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Link Button Style -->
+        <Style x:Key="LinkButtonStyle" TargetType="Button">
+            <Setter Property="Padding" Value="10,5"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Margin" Value="5"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{StaticResource LinkColor}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" 
+                                Padding="{TemplateBinding Padding}">
+                            <TextBlock Text="{TemplateBinding Content}" 
+                                       TextDecorations="Underline"
+                                       Foreground="{TemplateBinding Foreground}"
+                                       HorizontalAlignment="Center" 
+                                       VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Foreground" Value="{StaticResource PrimaryDarkColor}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+    </Window.Resources>
+    
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>   <!-- Header -->
+            <RowDefinition Height="*"/>      <!-- Content -->
+            <RowDefinition Height="Auto"/>   <!-- Buttons -->
+        </Grid.RowDefinitions>
+        
+        <!-- Header -->
+        <Border Grid.Row="0" 
+                Background="{StaticResource SurfaceColor}" 
+                BorderBrush="{StaticResource BorderColor}"
+                BorderThickness="0,0,0,1"
+                Padding="15"
+                Margin="-20,-20,-20,20">
+            <StackPanel Orientation="Horizontal">
+                <Image x:Name="KodamaIcon" 
+                       Width="60" 
+                       Height="60" 
+                       Margin="0,0,15,0"
+                       VerticalAlignment="Center"/>
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="Say Hello to Kodama!"
+                               FontSize="22"
+                               FontWeight="SemiBold"
+                               Margin="0,0,0,8"/>
+                    <TextBlock Text="Before you begin, please review the following important information about this AI assistant"
+                               FontSize="12"
+                               Foreground="{StaticResource TextSecondaryColor}"/>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+        
+        <!-- Content -->
+        <ScrollViewer Grid.Row="1" 
+                      VerticalScrollBarVisibility="Auto" 
+                      Padding="5,0,10,0"
+                      Background="{StaticResource SurfaceColor}"
+                      BorderBrush="{StaticResource BorderColor}"
+                      BorderThickness="1">
+            <StackPanel Margin="15">
+                
+                <!-- AI Response Accuracy Section -->
+                <TextBlock Text="AI Response Accuracy"
+                           FontSize="14"
+                           FontWeight="SemiBold"
+                           Margin="0,0,0,10"/>
+                
+                <StackPanel Margin="15,0,0,15">
+                    <TextBlock Margin="0,3">
+                        <Run Text="•" FontWeight="Bold"/>
+                        <Run Text=" This chatbot uses AI to assist with BIM standards questions"/>
+                    </TextBlock>
+                    <TextBlock Margin="0,3">
+                        <Run Text="•" FontWeight="Bold"/>
+                        <Run Text=" AI responses may contain errors or inaccuracies"/>
+                    </TextBlock>
+                    <TextBlock Margin="0,3">
+                        <Run Text="•" FontWeight="Bold"/>
+                        <Run Text=" Always verify information against official source documentation"/>
+                    </TextBlock>
+                    <TextBlock Margin="0,3">
+                        <Run Text="•" FontWeight="Bold"/>
+                        <Run Text=" Use your professional judgment when applying AI-generated guidance"/>
+                    </TextBlock>
+                </StackPanel>
+                
+                <!-- Data Collection & Privacy Section -->
+                <TextBlock Text="Data Collection &amp; Privacy"
+                           FontSize="14"
+                           FontWeight="SemiBold"
+                           Margin="0,10,0,10"/>
+                
+                <TextBlock Margin="0,0,0,8">
+                    <Run Text="To improve this service, we collect usage data including:"/>
+                </TextBlock>
+                
+                <StackPanel Margin="15,0,0,8">
+                    <TextBlock Margin="0,3">
+                        <Run Text="•" FontWeight="Bold"/>
+                        <Run Text=" Message content (questions and responses)"/>
+                    </TextBlock>
+                    <TextBlock Margin="0,3">
+                        <Run Text="•" FontWeight="Bold"/>
+                        <Run Text=" Interaction patterns and session information"/>
+                    </TextBlock>
+                    <TextBlock Margin="0,3">
+                        <Run Text="•" FontWeight="Bold"/>
+                        <Run Text=" Feedback and error reports"/>
+                    </TextBlock>
+                </StackPanel>
+                
+                <StackPanel Margin="15,0,0,15">
+                    <TextBlock Margin="0,3">
+                        <Run Text="•" FontWeight="Bold"/>
+                        <Run Text=" This data helps us enhance accuracy and user experience"/>
+                    </TextBlock>
+                    <TextBlock Margin="0,3">
+                        <Run Text="•" FontWeight="Bold"/>
+                        <Run Text=" Data is used internally for service improvement only"/>
+                    </TextBlock>
+                </StackPanel>
+                
+                <!-- Best Practices Section -->
+                <TextBlock Text="Best Practices"
+                           FontSize="14"
+                           FontWeight="SemiBold"
+                           Margin="0,10,0,10"/>
+                
+                <StackPanel Margin="15,0,0,15">
+                    <TextBlock Margin="0,3">
+                        <Run Text="•" FontWeight="Bold"/>
+                        <Run Text=" Cross-reference AI suggestions with official BIM standards"/>
+                    </TextBlock>
+                    <TextBlock Margin="0,3">
+                        <Run Text="•" FontWeight="Bold"/>
+                        <Run Text=" Consult with your project team or BIM manager when in doubt"/>
+                    </TextBlock>
+                    <TextBlock Margin="0,3">
+                        <Run Text="•" FontWeight="Bold"/>
+                        <Run Text=" Report any concerning responses to help us improve"/>
+                    </TextBlock>
+                </StackPanel>
+                
+                <!-- Acknowledgment -->
+                <Border Background="#E3F2FD" 
+                        BorderBrush="{StaticResource PrimaryColor}"
+                        BorderThickness="2"
+                        Padding="15"
+                        Margin="0,20,0,10"
+                        CornerRadius="4">
+                    <StackPanel>
+                        <TextBlock FontSize="14"
+                                   FontWeight="SemiBold"
+                                   Foreground="{StaticResource PrimaryColor}"
+                                   TextAlignment="Center"
+                                   Margin="0,0,0,8"
+                                   Text="Important"/>
+                        <TextBlock FontSize="12"
+                                   FontWeight="Normal"
+                                   Foreground="{StaticResource TextPrimaryColor}"
+                                   TextAlignment="Center"
+                                   Text="By continuing, you acknowledge that you have read and understand these terms."/>
+                    </StackPanel>
+                </Border>
+                
+                <!-- Learn More Link -->
+                <TextBlock TextAlignment="Center" Margin="0,15,0,10">
+                    <Hyperlink x:Name="LearnMoreLink"
+                               FontSize="12"
+                               Foreground="{StaticResource LinkColor}">
+                        <Run Text="Learn more about Kodama on the intranet"/>
+                    </Hyperlink>
+                </TextBlock>
+                
+            </StackPanel>
+        </ScrollViewer>
+        
+        <!-- Buttons -->
+        <Border Grid.Row="2" 
+                Background="{StaticResource SurfaceColor}" 
+                BorderBrush="{StaticResource BorderColor}"
+                BorderThickness="0,1,0,0"
+                Padding="15"
+                Margin="-20,20,-20,-20">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                
+                <!-- DCT Link (Left) -->
+                <Button x:Name="DctButton" 
+                        Grid.Column="0"
+                        Content="Submit Question to DCT"
+                        Style="{StaticResource LinkButtonStyle}"
+                        HorizontalAlignment="Left"/>
+                
+                <!-- Accept/Decline Buttons (Right) -->
+                <Button x:Name="DeclineButton" 
+                        Grid.Column="2"
+                        Content="No, Thanks"
+                        MinWidth="120"/>
+                
+                <Button x:Name="AcceptButton" 
+                        Grid.Column="3"
+                        Content="I Understand"
+                        Style="{StaticResource PrimaryButtonStyle}"
+                        MinWidth="120"/>
+            </Grid>
+        </Border>
+        
+    </Grid>
+</Window>

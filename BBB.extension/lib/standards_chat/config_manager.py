@@ -211,3 +211,20 @@ class ConfigManager:
                 "Secret '{}' not found in api_keys.json".format(key_name)
             )
         return self.api_keys[key_name]
+
+    def has_accepted_disclaimer(self):
+        """Check if user has accepted the disclaimer"""
+        return self.get('user', 'has_seen_disclaimer', False)
+    
+    def mark_disclaimer_accepted(self):
+        """Mark disclaimer as accepted and save to user preferences"""
+        from datetime import datetime
+        
+        if 'user' not in self.config:
+            self.config['user'] = {}
+        
+        self.config['user']['has_seen_disclaimer'] = True
+        self.config['user']['disclaimer_accepted_date'] = datetime.now().isoformat()
+        self.config['user']['disclaimer_version'] = '1.0'
+        
+        self.save()
