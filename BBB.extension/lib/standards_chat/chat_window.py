@@ -43,6 +43,21 @@ from standards_chat.usage_logger import UsageLogger
 from standards_chat.revit_actions import RevitActionExecutor, parse_action_from_response
 from standards_chat.history_manager import HistoryManager
 
+# Logger that writes to file only (no console output)
+def debug_log(message):
+    """Write debug message to log file"""
+    try:
+        import io
+        from datetime import datetime
+        log_dir = os.path.join(os.environ.get('APPDATA', ''), 'BBB', 'StandardsAssistant')
+        if not os.path.exists(log_dir):
+            os.makedirs(log_dir)
+        log_path = os.path.join(log_dir, 'debug_log.txt')
+        with io.open(log_path, 'a', encoding='utf-8') as f:
+            f.write(u"{} - {}\n".format(datetime.now().isoformat(), message))
+    except Exception:
+        pass
+
 
 class StandardsChatWindow(Window):
     """Main chat window for Kodama"""
@@ -176,6 +191,7 @@ class StandardsChatWindow(Window):
             self.vector_db_client = None
             try:
                 if self.config.get_config('features.enable_vector_search', False):
+                    debug_log("Vector search is enabled, attempting to initialize client")
                     # 1. Try Native Client (CPython)
                     try:
                         # Use dynamic import to avoid IronPython parsing issues
@@ -184,17 +200,23 @@ class StandardsChatWindow(Window):
                         temp_vdb = VectorDBClient(self.config)
                         if temp_vdb.is_developer_mode_enabled():
                             self.vector_db_client = temp_vdb
-                    except ImportError:
+                            debug_log("Using native VectorDBClient")
+                        else:
+                            debug_log("Developer mode not enabled, skipping native client")
+                    except ImportError as ie:
+                        debug_log("Native VectorDBClient import failed: {}".format(safe_str(ie)))
                         # 2. Native failed (IronPython or missing pkgs), try Interop Client
                         try:
                             # Use interop client to call CLI
                             interop_module = __import__('standards_chat.vector_db_interop', fromlist=['VectorDBInteropClient'])
                             VectorDBInteropClient = interop_module.VectorDBInteropClient
                             self.vector_db_client = VectorDBInteropClient(self.config)
+                            debug_log("Using VectorDBInteropClient (CLI mode)")
                         except Exception as ex:
                             safe_print("Vector DB Interop failed: {}".format(safe_str(ex)))
+                else:
+                    debug_log("Vector search is disabled in config")
             except Exception as e:
-                # Other errors should be logged
                 safe_print("Vector DB initialization error: {}".format(safe_str(e)))
             
             # Initialize usage logger
@@ -270,15 +292,41 @@ class StandardsChatWindow(Window):
     def Close(self):
         """Override Close to handle cross-thread calls from pyRevit reload."""
         try:
+            # First check if window is already closed/disposed
+            try:
+                _ = self.IsVisible
+            except Exception:
+                # Window is disposed, nothing to do
+                return
+                
             if self.Dispatcher.CheckAccess():
                 # We're on the UI thread - close normally
-                Window.Close(self)
+                try:
+                    Window.Close(self)
+                except Exception:
+                    # Already closing or disposed
+                    pass
             else:
                 # Called from a different thread (e.g. pyRevit reload)
-                # Dispatch to the UI thread
-                self.Dispatcher.Invoke(lambda: Window.Close(self))
+                # Try to dispatch to UI thread with timeout
+                try:
+                    self.Dispatcher.BeginInvoke(
+                        System.Action(lambda: self._safe_close())
+                    )
+                except Exception:
+                    # Dispatcher may be shut down already
+                    pass
         except Exception:
             # Window may already be closed or disposed - ignore
+            pass
+    
+    def _safe_close(self):
+        """Safely close window on UI thread"""
+        try:
+            if not self.IsVisible:
+                return
+            Window.Close(self)
+        except Exception:
             pass
 
     def on_closed(self, sender, args):
@@ -286,7 +334,10 @@ class StandardsChatWindow(Window):
         try:
             # Stop any timers
             if hasattr(self, 'typing_timer') and self.typing_timer:
-                self.typing_timer.Stop()
+                try:
+                    self.typing_timer.Stop()
+                except Exception:
+                    pass
                 self.typing_timer = None
             
             # Clear references to help GC
@@ -301,7 +352,8 @@ class StandardsChatWindow(Window):
             # Force garbage collection in IronPython
             import gc
             gc.collect()
-        except:
+        except Exception:
+            # Swallow any errors during cleanup
             pass
 
     def on_header_icon_click(self, sender, args):
@@ -1200,50 +1252,69 @@ class StandardsChatWindow(Window):
         # Process in background thread
         def process_query():
             try:
-                # print("DEBUG: process_query started")
-                # Update status: Searching
-                # self.update_typing_status("Searching BBB's Revit standards...")
-                
+                debug_log("process_query started")
                 # Use direct user input for search - vector search handles semantics natively
                 search_query = user_input
                 keyword_tokens_in = 0
                 keyword_tokens_out = 0
                 
                 # Search standards - use vector search if available
-                # print("DEBUG: Calling search_standards")
+                debug_log("Calling search with query: {}".format(safe_str(user_input)))
                 if self.vector_db_client is not None:
+                    debug_log("Using vector_db_client for search")
                     # Use hybrid vector search (semantic + keyword)
-                    # self.update_typing_status("Performing semantic search...")
                     relevant_pages = self.vector_db_client.hybrid_search(
                         query=user_input,  # Use original user input for semantic search
                         deduplicate=True
                     )
-                    # print("DEBUG: Vector search returned {} pages".format(len(relevant_pages)))
+                    debug_log("Vector search returned {} pages".format(len(relevant_pages)))
+                    if relevant_pages:
+                        debug_log("First result: title='{}', score={:.4f}".format(
+                            safe_str(relevant_pages[0].get('title', 'NO TITLE'))[:60],
+                            relevant_pages[0].get('score', 0)
+                        ))
                 else:
+                    debug_log("vector_db_client is None, using standards_client")
                     # Fall back to standard SharePoint keyword search
                     relevant_pages = self.standards_client.search_standards(search_query)
-                    # print("DEBUG: search_standards returned {} pages".format(len(relevant_pages)))
+                    debug_log("search_standards returned {} pages".format(len(relevant_pages)))
                 
-                # Update status: Found results
-                # if relevant_pages:
-                #    self.update_typing_status("Found {} page(s), analyzing content...".format(len(relevant_pages)))
-                # else:
-                #    self.update_typing_status("Preparing response...")
-                
-                # Update status: Generating
-                # self.update_typing_status("Generating response...")
+                # Determine if search results are too low-confidence to answer the question.
+                # A top score below 0.4 means the best match is a weak semantic overlap --
+                # Claude will almost certainly not have a useful answer.
+                LOW_CONFIDENCE_THRESHOLD = 0.4
+                top_score = relevant_pages[0].get('score', 0) if relevant_pages else 0
+                self._show_dct_button = (top_score < LOW_CONFIDENCE_THRESHOLD)
+                debug_log("top search score={:.4f}, show_dct_button={}".format(top_score, self._show_dct_button))
                 
                 # Remove typing indicator and add empty message bubble for streaming
-                self.Dispatcher.Invoke(self.start_streaming_response)
+                try:
+                    self.Dispatcher.Invoke(self.start_streaming_response)
+                    debug_log("start_streaming_response invoked")
+                except Exception as start_err:
+                    import traceback
+                    safe_print("ERROR: Failed to invoke start_streaming_response: {}".format(safe_str(start_err)))
+                    debug_log("ERROR invoking start_streaming_response: {}\n{}".format(
+                        safe_str(start_err), traceback.format_exc()
+                    ))
+                
+                debug_log("Calling Claude with {} pages".format(len(relevant_pages)))
                 
                 # Callback for streaming chunks
                 def on_chunk(text_chunk):
                     try:
-                        self.Dispatcher.Invoke(
-                            lambda: self.append_to_streaming_response(text_chunk)
-                        )
+                        # Capture text_chunk value in closure to avoid lambda capture issues
+                        chunk_to_append = text_chunk
+                        try:
+                            self.Dispatcher.Invoke(
+                                lambda: self.append_to_streaming_response(chunk_to_append)
+                            )
+                        except Exception as disp_err:
+                            safe_print("ERROR: Dispatcher.Invoke failed: {}".format(safe_str(disp_err)))
+                            debug_log("ERROR: Dispatcher.Invoke failed: {}".format(safe_str(disp_err)))
                     except Exception as e:
                         safe_print(u"ERROR in on_chunk callback: {}".format(safe_str(e)))
+                        debug_log(u"ERROR in on_chunk callback: {}".format(safe_str(e)))
                 
                 # Get streaming response from Claude
                 response = self.anthropic.get_response_stream(
@@ -1255,6 +1326,8 @@ class StandardsChatWindow(Window):
                     screenshot_base64=screenshot_base64
                 )
                 
+                debug_log("Claude response received, text length: {}".format(len(response.get('text', ''))))
+
                 # Extract URLs from sources
                 source_urls = []
                 sources = response.get('sources', [])
@@ -1511,6 +1584,7 @@ class StandardsChatWindow(Window):
 
     def start_streaming_response(self):
         """Remove typing indicator and create empty message bubble for streaming"""
+        debug_log("start_streaming_response: called")
         # Stop timer if running
         if hasattr(self, 'typing_timer') and self.typing_timer:
             self.typing_timer.Stop()
@@ -1545,6 +1619,7 @@ class StandardsChatWindow(Window):
         self.streaming_content_stack = content_stack
         self.streaming_text = u""
         
+        debug_log("start_streaming_response: setup complete")
         # Scroll to bottom
         self.message_scrollviewer.ScrollToBottom()
     
@@ -1569,7 +1644,10 @@ class StandardsChatWindow(Window):
 
                 # Scroll to bottom
                 self.message_scrollviewer.ScrollToBottom()
+            else:
+                debug_log("append_to_streaming_response: streaming_textblock does not exist")
         except Exception as e:
+            safe_print("ERROR in append_to_streaming_response: {}".format(safe_str(e)))
             # Log to file since pyRevit console may be disposed
             try:
                 import os, io, traceback
@@ -1626,17 +1704,13 @@ class StandardsChatWindow(Window):
                     if sources_panel and hasattr(self, 'streaming_content_stack'):
                         self.streaming_content_stack.Children.Add(sources_panel)
                 
-                # Check if response indicates unable to find information
-                # Look for the specific phrase we instructed Claude to use
-                # Use safe string comparison to avoid Unicode issues
+                # Show DCT button if search confidence was too low to reliably answer
                 try:
-                    # Ensure display_text is unicode for comparison
-                    check_text = display_text if isinstance(display_text, unicode) else unicode(display_text)
-                    if u"I couldn't find this information in BBB's standards documentation" in check_text:
-                        # Add DCT ticket suggestion panel
+                    if getattr(self, '_show_dct_button', False):
                         self._add_dct_ticket_panel()
+                        self._show_dct_button = False
                 except Exception as detect_err:
-                    safe_print(u"Error detecting no-answer phrase: {}".format(safe_str(detect_err)))
+                    safe_print(u"Error showing DCT panel: {}".format(safe_str(detect_err)))
             
             # Scroll to bottom
             self.message_scrollviewer.ScrollToBottom()
@@ -1655,8 +1729,6 @@ class StandardsChatWindow(Window):
     
     def _add_action_buttons(self, parent_border, actions):
         """Add action buttons to response bubble"""
-        # safe_print("DEBUG: _add_action_buttons called with {} actions".format(len(actions)))
-        
         from System.Windows.Controls import Button, StackPanel
         
         # Clear any previously active action button
@@ -1666,18 +1738,13 @@ class StandardsChatWindow(Window):
             # Get the existing textblock and remove it from border
             existing_textblock = parent_border.Child
             parent_border.Child = None  # CRITICAL: Remove from border first!
-            # safe_print("DEBUG: Got existing textblock and removed from border")
             
             # Create new stack panel to hold text + buttons
             stack = StackPanel()
             stack.Children.Add(existing_textblock)
-            # safe_print("DEBUG: Created stack panel and added textblock")
             
             # Add buttons for each action
             for i, action_data in enumerate(actions):
-                # safe_print("DEBUG: Creating button {} for action type: {}".format(
-                #     i, action_data.get('type', 'unknown')
-                # ))
                 button = Button()
                 button.Content = action_data.get('label', 'Execute Action')
                 button.Style = self.FindResource("ActionButtonStyle")
@@ -1689,7 +1756,6 @@ class StandardsChatWindow(Window):
                 button.Click += self.on_action_button_click
                 
                 stack.Children.Add(button)
-                # safe_print("DEBUG: Button {} added to stack".format(i))
                 
                 # Set first button as active (can be triggered with Enter)
                 if i == 0:
@@ -1697,12 +1763,9 @@ class StandardsChatWindow(Window):
             
             # Set stack panel as border content
             parent_border.Child = stack
-            # safe_print("DEBUG: Stack panel set as border child - {} children total".format(stack.Children.Count))
             
         except Exception as e:
-            safe_print("DEBUG: Error in _add_action_buttons: {}".format(safe_str(e)))
-            import traceback
-            # traceback.print_exc()
+            safe_print("Error in _add_action_buttons: {}".format(safe_str(e)))
     
     def on_action_button_click(self, sender, args):
         """Handle action button click"""

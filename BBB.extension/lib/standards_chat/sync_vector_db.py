@@ -25,9 +25,51 @@ except:
 def main():
     """Perform SharePoint to vector DB sync"""
     try:
-        from standards_chat.config_manager import ConfigManager
-        from standards_chat.sharepoint_client import SharePointClient
-        from standards_chat.vector_db_client import VectorDBClient
+        # Import modules directly to avoid triggering package __init__.py
+        # which tries to load IronPython dependencies (clr)
+        import importlib.util
+        
+        # Get the standards_chat directory
+        standards_chat_dir = os.path.dirname(__file__)
+        
+        # Load utils first (required by other modules)
+        utils_spec = importlib.util.spec_from_file_location(
+            "standards_chat.utils",
+            os.path.join(standards_chat_dir, "utils.py")
+        )
+        utils_module = importlib.util.module_from_spec(utils_spec)
+        sys.modules['standards_chat.utils'] = utils_module
+        utils_spec.loader.exec_module(utils_module)
+        
+        # Load config_manager
+        config_spec = importlib.util.spec_from_file_location(
+            "standards_chat.config_manager", 
+            os.path.join(standards_chat_dir, "config_manager.py")
+        )
+        config_module = importlib.util.module_from_spec(config_spec)
+        sys.modules['standards_chat.config_manager'] = config_module
+        config_spec.loader.exec_module(config_module)
+        ConfigManager = config_module.ConfigManager
+        
+        # Load sharepoint_client
+        sharepoint_spec = importlib.util.spec_from_file_location(
+            "standards_chat.sharepoint_client",
+            os.path.join(standards_chat_dir, "sharepoint_client.py")
+        )
+        sharepoint_module = importlib.util.module_from_spec(sharepoint_spec)
+        sys.modules['standards_chat.sharepoint_client'] = sharepoint_module
+        sharepoint_spec.loader.exec_module(sharepoint_module)
+        SharePointClient = sharepoint_module.SharePointClient
+        
+        # Load vector_db_client
+        vector_spec = importlib.util.spec_from_file_location(
+            "standards_chat.vector_db_client",
+            os.path.join(standards_chat_dir, "vector_db_client.py")
+        )
+        vector_module = importlib.util.module_from_spec(vector_spec)
+        sys.modules['standards_chat.vector_db_client'] = vector_module
+        vector_spec.loader.exec_module(vector_module)
+        VectorDBClient = vector_module.VectorDBClient
         
         print("Initializing clients...")
         config_manager = ConfigManager()

@@ -162,7 +162,8 @@ class HistoryManager:
                     filepath = os.path.join(self.history_dir, filename)
                     f = None
                     try:
-                        f = open(filepath, 'r')
+                        import io
+                        f = io.open(filepath, 'r', encoding='utf-8')
                         data = json.load(f)
                         sessions.append({
                             'session_id': data.get('session_id', filename[:-5]),

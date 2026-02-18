@@ -30,15 +30,12 @@ class ActionEventHandler(IExternalEventHandler):
         """Execute the action in Revit's API context"""
         try:
             if self.executor and self.action_data:
-                print("DEBUG: Executing action: {}".format(self.action_data.get('type')))
                 self.result = self.executor._execute_action_internal(self.action_data)
             else:
                 self.result = {'success': False, 'message': 'No action data'}
-                print("DEBUG: No action data available")
         except Exception as e:
             import traceback
             error_msg = 'Error: {}\n{}'.format(str(e), traceback.format_exc())
-            print("DEBUG: Exception in Execute: {}".format(error_msg))
             self.result = {'success': False, 'message': error_msg}
         
         # Call callback if provided
@@ -119,8 +116,6 @@ class RevitActionExecutor:
         Returns:
             dict: Result with success status and details of each step
         """
-        print("DEBUG: Starting workflow with {} actions".format(len(actions)))
-        
         # Package workflow as special action type to execute in single ExternalEvent
         workflow_action = {
             'type': 'workflow',
@@ -163,8 +158,6 @@ class RevitActionExecutor:
         workflow_context = {}  # Share data between actions
         
         for i, action_data in enumerate(actions):
-            print("DEBUG: Executing action {} of {}: {}".format(i+1, len(actions), action_data.get('type')))
-            
             # Substitute variables from previous results
             action_data = self._substitute_workflow_variables(action_data, workflow_context)
             
@@ -179,8 +172,6 @@ class RevitActionExecutor:
             
             # Execute action directly (we're already in ExternalEvent context)
             result = self._execute_action_internal(action_data)
-            
-            print("DEBUG: Action {} result: {}".format(i+1, result))
             results.append(result)
             
             # Update workflow context with result data
@@ -786,17 +777,14 @@ def parse_action_from_response(response_text):
     
     for json_str in json_blocks:
         try:
-            print("DEBUG: Parsing JSON: {}".format(json_str[:100]))
             action_data = json.loads(json_str)
             
             # Check for single action
             if 'action' in action_data:
-                print("DEBUG: Found action: {}".format(action_data['action'].get('type')))
                 actions.append(action_data['action'])
             
             # Check for workflow (array of actions)
             elif 'workflow' in action_data:
-                print("DEBUG: Found workflow with {} steps".format(len(action_data['workflow'])))
                 # Return workflow as a special action type that will be handled differently
                 actions.append({
                     'type': 'workflow',
@@ -804,11 +792,7 @@ def parse_action_from_response(response_text):
                     'description': 'Multi-step workflow',
                     'workflow': action_data['workflow']
                 })
-            
-            else:
-                print("DEBUG: No 'action' or 'workflow' key in JSON")
         except Exception as e:
-            print("DEBUG: Error parsing JSON: {}".format(str(e)))
             continue
     
     return actions

@@ -1,29 +1,11 @@
 {
-  "features": {
-    "standards_source": "sharepoint",
-    "enable_vector_search": true,
-    "include_context": true,
-    "include_screenshot": true,
-    "enable_actions": false,
-    "enable_workflows": false
-  },
-  "notion": {
-    "database_id": "2abd917dca7580dd8deefb81d87c66d2",
-    "cache_duration_minutes": 60,
-    "api_version": "2022-06-28",
-    "max_search_results": 5
-  },
-  "logging": {
-    "central_log_dir": "N:\\Design Technology Resources\\00_Admin\\ChatLogs",
-    "analytics_enabled": true,
-    "central_log_path": "",
-    "log_file": "standards_chat.log",
-    "enabled": true
+  "anthropic": {
+    "max_tokens": 2048,
+    "temperature": 0.7,
+    "system_prompt": "## WHO YOU ARE\n\nYou are Kodama, BBB's in-house Revit standards assistant. You have access to three types of BBB content:\n\n* Standards Pages - The official BBB standards. These are the source of truth for how things should be done at BBB.\n* PDF Guides - Reference material and detailed guides that explain concepts and workflows.\n* Training Videos - Instructional video content with transcripts. Good for learning how to do something step by step.\n\nWhen answering, lean on the right type of content for the question. For example:\n- \"How should we do X at BBB?\" -> Lead with the Standards Page if one exists.\n- \"How do I learn X?\" -> Point to relevant Training Videos.\n- If a Training Video covers the how and a Standards Page defines the what, bring both together naturally.\n- When referencing a training video, mention if a written standard also applies.\n\n## TONE AND STYLE\n\nBe conversational and direct -- like a knowledgeable colleague, not a policy document. Lead with the answer. Use plain language. Keep it concise unless the topic genuinely requires detail. Do not use bullet points for single items.\n\n## SOURCE RULES\n\nAll BBB-specific guidance must come from the provided documents. Do not invent or assume BBB practices. If the documents don't answer the question, say so naturally -- for example: \"I don't have that in the standards, worth checking with your BIM Manager.\" Do NOT include citation links [1][2] when the retrieved documents are not relevant to the answer. General Revit knowledge (not BBB-specific) is fine to share without a source.\n\n## CHARACTER ENCODING\n\nUse only ASCII characters. No smart quotes, em dashes, ellipsis, or special symbols. Use regular quotes, double hyphens (--), and three periods (...) instead.",
+    "model": "claude-sonnet-4-5"
   },
   "ui": {
-    "window_height": 700,
-    "window_width": 750,
-    "theme": "light",
     "suggested_prompts": [
       "What are the naming conventions for parameters?",
       "Where can I find prevetted families?",
@@ -37,50 +19,68 @@
       "Where is the BBB Revit template?",
       "What is the process for upgrading a project?",
       "What are the approved dimension styles?"
-    ]
+    ],
+    "theme": "light",
+    "window_width": 750,
+    "window_height": 700
+  },
+  "logging": {
+    "central_log_path": "",
+    "analytics_enabled": true,
+    "enabled": true,
+    "central_log_dir": "N:\\Design Technology Resources\\00_Admin\\ChatLogs",
+    "log_file": "standards_chat.log"
+  },
+  "sharepoint": {
+    "include_training_videos": true,
+    "pdf_extraction_timeout_seconds": 30,
+    "region": "US",
+    "max_search_results": 5,
+    "include_pdfs": true,
+    "site_url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards",
+    "site_id": "fc5e6d27-c959-415e-b0a8-eca5d2452de5",
+    "api_version": "v1.0",
+    "pdf_max_size_mb": 50,
+    "client_id": "c4a73705-1e01-4cd7-8eb8-640e3d9ec589",
+    "training_videos_folder_path": "Training/BIM Pure Videos",
+    "cache_duration_minutes": 60,
+    "tenant_id": "2567262b-5dc4-4f41-a124-61f9919bba3d"
   },
   "vector_search": {
-    "hybrid_search_weight_semantic": 0.7,
-    "developer_mode": true,
-    "last_sync_timestamp": "2026-02-12T14:31:41.427594",
-    "embedding_model": "text-embedding-3-small",
-    "hybrid_search_weight_keyword": 0.3,
-    "embedding_provider": "openai",
-    "similarity_threshold": 0.5,
-    "embedding_dimensions": 1536,
-    "indexed_chunk_count": 436,
-    "db_path": "vector_db",
-    "indexed_document_count": 157,
-    "max_results": 10,
-    "chunk_size": 800,
+    "failed_pdf_count": 0,
+    "indexed_document_count": 288,
+    "last_sync_timestamp": "2026-02-18T16:39:35.176058",
+    "chunk_overlap": 150,
+    "indexed_pdf_count": 39,
     "developer_whitelist": [
       "nrackard"
     ],
-    "chunk_overlap": 150,
-    "indexed_pdf_count": 36,
-    "failed_pdf_count": 0,
-    "indexed_video_count": 75,
-    "failed_video_count": 0
+    "developer_mode": true,
+    "failed_video_count": 0,
+    "hybrid_search_weight_semantic": 0.7,
+    "chunk_size": 800,
+    "hybrid_search_weight_keyword": 0.3,
+    "embedding_dimensions": 1536,
+    "indexed_chunk_count": 669,
+    "db_path": "vector_db",
+    "similarity_threshold": 0.5,
+    "max_results": 10,
+    "indexed_video_count": 202,
+    "embedding_model": "text-embedding-3-small",
+    "embedding_provider": "openai"
   },
-  "sharepoint": {
-    "site_url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards",
-    "client_id": "c4a73705-1e01-4cd7-8eb8-640e3d9ec589",
-    "region": "US",
-    "cache_duration_minutes": 60,
-    "api_version": "v1.0",
-    "tenant_id": "2567262b-5dc4-4f41-a124-61f9919bba3d",
+  "features": {
+    "include_context": true,
+    "enable_workflows": false,
+    "include_screenshot": true,
+    "enable_actions": false,
+    "standards_source": "sharepoint",
+    "enable_vector_search": true
+  },
+  "notion": {
+    "database_id": "2abd917dca7580dd8deefb81d87c66d2",
     "max_search_results": 5,
-    "site_id": "fc5e6d27-c959-415e-b0a8-eca5d2452de5",
-    "include_pdfs": true,
-    "pdf_max_size_mb": 50,
-    "pdf_extraction_timeout_seconds": 30,
-    "include_training_videos": true,
-    "training_videos_folder_path": "Training/BIM Pure Videos"
-  },
-  "anthropic": {
-    "model": "claude-sonnet-4-5",
-    "max_tokens": 2048,
-    "system_prompt": "## Response Style: Concise and Actionable\n\n**Core Principle**: Lead with what matters. Prioritize actionable information over explanation.\n\n**Guidelines**:\n- **Front-load key information**: Start with the answer, recommendation, or action item\n- **Be direct**: Say what needs to be done before explaining why\n- **Limit elaboration**: Provide context only when it's essential to understanding\n- **Use structure strategically**: Employ bullets/lists only for multiple distinct items\n- **Default to brevity**: Aim for 2-3 sentences for simple queries, 1-2 short paragraphs for complex ones\n- **Avoid filler**: No throat-clearing phrases like \"It's worth noting that\" or \"To clarify\"\n\n**When to elaborate**:\n- User explicitly asks for explanation or background\n- Safety/correctness requires additional context\n- Multiple options need comparison\n\n**Anti-patterns to avoid**:\n- \u274c Long preambles before getting to the point\n- \u274c Exhaustive explanations of obvious concepts\n- \u274c Multiple paragraphs when one sentence suffices\n- \u274c Over-explaining edge cases unless relevant\n\n**Good example**:\n\"Use `str_replace` to update that section. The old string needs to match exactly, including whitespace.\"\n\n**Bad example**:\n\"When you're working with file editing, there are several approaches you might consider. One particularly useful tool is the str_replace function, which allows you to replace text in files. It's important to understand that this function requires...\"\n\nRemember to be concise and actionable.\n\n## CHARACTER ENCODING REQUIREMENTS\n\n**USE ONLY ASCII CHARACTERS**:\n- Use only standard ASCII characters (letters, numbers, basic punctuation)\n- DO NOT use Unicode characters like smart quotes, em dashes, ellipsis, or special symbols\n- Replace:\n  - Smart quotes (\u201c \u201d) with regular quotes (\" \")\n  - Ellipsis (\u2026) with three periods (...)\n  - Em dashes (\u2014) with double hyphens (--)\n  - En dashes (\u2013) with single hyphen (-)\n  - Bullet points (\u2022) with asterisks (*)\n- This is critical for system compatibility\n\n## CRITICAL: SOURCE OF TRUTH REQUIREMENTS\n\n**ONLY USE PROVIDED SHAREPOINT DOCUMENTS**:\n- You are assisting users with BBB's Revit standards. ALL answers about BBB's standards MUST come EXCLUSIVELY from the SharePoint documents provided in the context.\n- DO NOT use your training data, general knowledge, or assumptions about BBB's standards.\n- If the provided SharePoint documents don't contain the answer, you MUST respond with the EXACT phrase at the start of your response: \"I couldn't find this information in BBB's standards documentation.\" Then you may offer to help in other ways.\n- Never make up, infer, or assume BBB-specific standards, naming conventions, procedures, or guidelines that aren't explicitly stated in the provided documents.\n- Only provide general Revit guidance (not BBB-specific) if the user explicitly asks for it AND you've confirmed the BBB standards don't cover it.\n\n**What you CAN do without sources**:\n- Answer general Revit software questions (interface, tools, features)\n- Explain universal BIM concepts\n- Clarify what the user is asking\n\n**What you CANNOT do without sources**:\n- State what BBB's standards require or recommend\n- Describe BBB's naming conventions or workflows\n- Make claims about BBB's specific practices or procedures",
-    "temperature": 0.7
+    "api_version": "2022-06-28",
+    "cache_duration_minutes": 60
   }
 }

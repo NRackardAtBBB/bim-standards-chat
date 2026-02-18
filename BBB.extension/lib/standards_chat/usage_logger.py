@@ -155,14 +155,13 @@ class UsageLogger:
             import io
             with io.open(self.local_log_file, 'a', encoding='utf-8') as f:
                 # Ensure json dump produces ascii-safe string
-                json_str = json.dumps(entry, ensure_ascii=True)
+                json_str = json.dumps(entry, ensure_ascii=False)
                 f.write(unicode(json_str) + u'\n')
         except Exception as e:
             # Fallback for severe encoding issues
             try:
                 with open(self.local_log_file, 'a') as f:
-                    # Fallback to ascii-escaped json
-                    f.write(json.dumps(entry, ensure_ascii=True) + '\n')
+                    f.write(json.dumps(entry, ensure_ascii=False) + '\n')
             except Exception:
                 pass # Give up silencing error to avoid crashing app
     
@@ -193,7 +192,7 @@ class UsageLogger:
             # Using JSONL is safer for appending and PowerBI supports it
             import io
             with io.open(file_path, 'a', encoding='utf-8') as f:
-                json_str = json.dumps(entry, ensure_ascii=True)
+                json_str = json.dumps(entry, ensure_ascii=False)
                 f.write(unicode(json_str) + u'\n')
                 
         except Exception as e:

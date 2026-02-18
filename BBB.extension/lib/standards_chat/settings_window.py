@@ -36,6 +36,10 @@ class SettingsWindow(forms.WPFWindow):
         
         forms.WPFWindow.__init__(self, xaml_path)
         
+        # Wire up reset disclaimer button (for module caching compatibility)
+        if hasattr(self, 'reset_disclaimer_btn'):
+            self.reset_disclaimer_btn.Click += self.reset_disclaimer_click
+        
         # Populate fields with current values
         self.populate_fields()
         
@@ -287,6 +291,30 @@ class SettingsWindow(forms.WPFWindow):
                 forms.alert("Deleted {} chat sessions.".format(count), title="Success")
             except Exception as e:
                 forms.alert("Error clearing history: {}".format(str(e)), title="Error")
+
+    def reset_disclaimer_click(self, sender, args):
+        """Reset disclaimer acceptance so it shows again on next launch"""
+        if forms.alert("This will reset your acceptance of the terms and conditions. The disclaimer will appear again the next time you launch Kodama.\n\nContinue?", 
+                      title="Reset Terms Acceptance", 
+                      yes=True, no=True):
+            try:
+                # Remove disclaimer acceptance flags
+                if 'user' in self.config:
+                    if 'has_seen_disclaimer' in self.config['user']:
+                        del self.config['user']['has_seen_disclaimer']
+                    if 'disclaimer_accepted_date' in self.config['user']:
+                        del self.config['user']['disclaimer_accepted_date']
+                    if 'disclaimer_version' in self.config['user']:
+                        del self.config['user']['disclaimer_version']
+                
+                # Save changes
+                self.config_manager.save()
+                forms.alert("Terms acceptance has been reset. The disclaimer will appear the next time you launch Kodama.", 
+                           title="Success")
+            except Exception as e:
+                forms.alert("Error resetting disclaimer: {}".format(str(e)), 
+                           title="Error", 
+                           warn_icon=True)
 
     def update_index_click(self, sender, args):
         """Update SharePoint search index"""

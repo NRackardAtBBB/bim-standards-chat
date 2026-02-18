@@ -225,8 +225,16 @@
                                 Content="Clear All Chat History" 
                                 HorizontalAlignment="Left"
                                 Click="clear_history_click"
-                                Margin="0,5,0,0"
+                                Margin="0,5,0,15"
                                 Padding="15,5"/>
+                        
+                        <TextBlock Text="Terms and Disclaimer:" FontWeight="Normal"/>
+                        <Button x:Name="reset_disclaimer_btn" 
+                                Content="Reset Terms Acceptance (Show Disclaimer Again)" 
+                                HorizontalAlignment="Left"
+                                Margin="0,5,0,0"
+                                Padding="15,5"
+                                ToolTip="Reset your acceptance of terms so the disclaimer will appear again on next launch"/>
                     </StackPanel>
                 </GroupBox>
                 

@@ -206,7 +206,7 @@ class VectorDBClient:
     def get_embeddings_batch(self, texts):
         """
         Generate embeddings for multiple texts in a single API call.
-        OpenAI supports up to 2048 texts per request.
+        OpenAI supports up to 2048 texts and 300,000 tokens per request.
         
         Args:
             texts: List of text strings to embed
@@ -217,21 +217,62 @@ class VectorDBClient:
         if not texts:
             return []
         
-        # OpenAI API supports up to 2048 inputs per request
-        batch_size = 2048
-        all_embeddings = []
+        # OpenAI API limits: 2048 inputs AND 300,000 tokens per request
+        # Use conservative limits to avoid errors
+        max_texts_per_batch = 2048
+        max_tokens_per_batch = 250000  # Leave safety margin
         
-        for i in range(0, len(texts), batch_size):
-            batch = texts[i:i + batch_size]
+        all_embeddings = []
+        current_batch = []
+        current_token_count = 0
+        batch_number = 1
+        
+        print("Generating embeddings for {} texts...".format(len(texts)))
+        
+        for i, text in enumerate(texts):
+            # Count tokens in this text
+            text_tokens = len(self.tokenizer.encode(text))
+            
+            # Check if adding this text would exceed limits
+            would_exceed_tokens = (current_token_count + text_tokens) > max_tokens_per_batch
+            would_exceed_count = len(current_batch) >= max_texts_per_batch
+            
+            # Process current batch if limits would be exceeded
+            if current_batch and (would_exceed_tokens or would_exceed_count):
+                print("  Batch {}: {} texts, {} tokens".format(
+                    batch_number, len(current_batch), current_token_count
+                ))
+                response = self.openai_client.embeddings.create(
+                    model=self.embedding_model,
+                    input=current_batch,
+                    dimensions=self.embedding_dimensions
+                )
+                batch_embeddings = [item.embedding for item in response.data]
+                all_embeddings.extend(batch_embeddings)
+                
+                # Reset for next batch
+                current_batch = []
+                current_token_count = 0
+                batch_number += 1
+            
+            # Add text to current batch
+            current_batch.append(text)
+            current_token_count += text_tokens
+        
+        # Process final batch
+        if current_batch:
+            print("  Batch {}: {} texts, {} tokens".format(
+                batch_number, len(current_batch), current_token_count
+            ))
             response = self.openai_client.embeddings.create(
                 model=self.embedding_model,
-                input=batch,
+                input=current_batch,
                 dimensions=self.embedding_dimensions
             )
-            # Extract embeddings in order
             batch_embeddings = [item.embedding for item in response.data]
             all_embeddings.extend(batch_embeddings)
         
+        print("Total embeddings generated: {}".format(len(all_embeddings)))
         return all_embeddings
     
     def index_documents(self, documents):
