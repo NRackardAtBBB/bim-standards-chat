@@ -281,14 +281,27 @@
         </Border>
         
         <!-- Messages Area -->
-        <ScrollViewer Grid.Row="1" 
-                     x:Name="MessageScrollViewer"
-                     VerticalScrollBarVisibility="Auto"
-                     Padding="10,15">
-            <StackPanel x:Name="MessagesPanel">
-                <!-- Welcome message generated dynamically in Python -->
-            </StackPanel>
-        </ScrollViewer>
+        <Grid Grid.Row="1">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+            <ScrollViewer Grid.Row="0"
+                         x:Name="MessageScrollViewer"
+                         VerticalScrollBarVisibility="Auto"
+                         Padding="10,15">
+                <StackPanel x:Name="MessagesPanel">
+                    <!-- Welcome message generated dynamically in Python -->
+                </StackPanel>
+            </ScrollViewer>
+            <TextBlock Grid.Row="1"
+                       Text="AI responses may contain errors — always verify against source documentation."
+                       FontSize="10"
+                       Foreground="#BBBBBB"
+                       HorizontalAlignment="Center"
+                       Margin="0,4,0,6"
+                       FontStyle="Italic"/>
+        </Grid>
         
         <!-- Input Area -->
         <Border Grid.Row="2" 

@@ -1271,7 +1271,7 @@ class StandardsChatWindow(Window):
                     if relevant_pages:
                         debug_log("First result: title='{}', score={:.4f}".format(
                             safe_str(relevant_pages[0].get('title', 'NO TITLE'))[:60],
-                            relevant_pages[0].get('score', 0)
+                            float(relevant_pages[0].get('score', 0))
                         ))
                 else:
                     debug_log("vector_db_client is None, using standards_client")
@@ -1283,7 +1283,7 @@ class StandardsChatWindow(Window):
                 # A top score below 0.4 means the best match is a weak semantic overlap --
                 # Claude will almost certainly not have a useful answer.
                 LOW_CONFIDENCE_THRESHOLD = 0.4
-                top_score = relevant_pages[0].get('score', 0) if relevant_pages else 0
+                top_score = float(relevant_pages[0].get('score', 0)) if relevant_pages else 0.0
                 self._show_dct_button = (top_score < LOW_CONFIDENCE_THRESHOLD)
                 debug_log("top search score={:.4f}, show_dct_button={}".format(top_score, self._show_dct_button))
                 
@@ -1447,18 +1447,34 @@ class StandardsChatWindow(Window):
                 except Exception as conv_err:
                     err_text = u"An error occurred (details in console)"
 
-                # Final safety: wrap the entire message creation
-                try:
-                    error_msg = u"Sorry, I encountered an error: {}".format(err_text)
-                    # Ensure the final message is ASCII-safe
-                    from standards_chat.utils import ascii_safe
-                    error_msg = ascii_safe(error_msg)
-                except Exception:
-                    error_msg = u"Sorry, an error occurred. Please check the console for details."
+                # Show friendly fallback message with DCT ticket button instead of
+                # exposing raw Python error details to the user.
+                def show_error_response():
+                    try:
+                        # Start the streaming bubble if it was never opened
+                        # (error occurred before start_streaming_response was called)
+                        if not getattr(self, 'streaming_border', None):
+                            self.start_streaming_response()
+                        friendly_text = u"Sorry, something went wrong while processing your request."
+                        self.streaming_text = friendly_text
+                        if hasattr(self, 'streaming_textblock') and self.streaming_textblock:
+                            self.streaming_textblock.Inlines.Clear()
+                            self._add_formatted_text(self.streaming_textblock, friendly_text)
+                        # Force the DCT ticket button to appear
+                        self._show_dct_button = True
+                        self.finish_streaming_response([])
+                    except Exception as display_err:
+                        safe_print(u"Error showing friendly error response: {}".format(safe_str(display_err)))
+                        # Last-resort plain fallback if streaming path itself fails
+                        try:
+                            self.replace_typing_with_response(
+                                u"Sorry, something went wrong. Please try again or open a ticket with DCT.",
+                                None
+                            )
+                        except Exception:
+                            pass
 
-                self.Dispatcher.Invoke(
-                    lambda: self.replace_typing_with_response(error_msg, None)
-                )
+                self.Dispatcher.Invoke(show_error_response)
             
             finally:
                 # Re-enable input
