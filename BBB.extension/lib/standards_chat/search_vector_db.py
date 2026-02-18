@@ -31,7 +31,7 @@ def main():
             print(json.dumps({
                 'success': False,
                 'error': 'No query provided'
-            }))
+            }, ensure_ascii=False))
             return 1
         
         # Check for base64 flag
@@ -50,14 +50,14 @@ def main():
             print(json.dumps({
                 'success': False,
                 'error': 'Vector search is disabled'
-            }))
+            }, ensure_ascii=False))
             return 1
         
         if not vector_db.is_developer_mode_enabled():
             print(json.dumps({
                 'success': False,
                 'error': 'User not authorized for vector search'
-            }))
+            }, ensure_ascii=False))
             return 1
         
         # Perform hybrid search
@@ -70,14 +70,14 @@ def main():
         print(json.dumps({
             'success': True,
             'results': results
-        }))
+        }, ensure_ascii=False))
         return 0
         
     except Exception as e:
         print(json.dumps({
             'success': False,
             'error': str(e)
-        }))
+        }, ensure_ascii=False))
         return 1
 
 

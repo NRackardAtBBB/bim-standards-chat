@@ -5,6 +5,7 @@ Handles loading and accessing configuration
 """
 
 import os
+import io
 import json
 
 
@@ -34,7 +35,7 @@ class ConfigManager:
         if os.path.exists(self.user_prefs_path):
             f = None
             try:
-                f = open(self.user_prefs_path, 'r')
+                f = io.open(self.user_prefs_path, 'r', encoding='utf-8')
                 user_prefs = json.load(f)
             except Exception:
                 pass
@@ -58,8 +59,9 @@ class ConfigManager:
         
         f = None
         try:
-            f = open(self.user_prefs_path, 'w')
-            json.dump(user_prefs, f, indent=2)
+            f = io.open(self.user_prefs_path, 'w', encoding='utf-8')
+            json_str = json.dumps(user_prefs, indent=2, ensure_ascii=False)
+            f.write(unicode(json_str))
         except Exception:
             pass
         finally:
@@ -88,7 +90,7 @@ class ConfigManager:
         
         f = None
         try:
-            f = open(filepath, 'r')
+            f = io.open(filepath, 'r', encoding='utf-8')
             return json.load(f)
         finally:
             if f:

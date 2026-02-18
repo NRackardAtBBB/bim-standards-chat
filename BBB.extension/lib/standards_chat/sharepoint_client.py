@@ -4,6 +4,7 @@ SharePoint API Client
 Handles all interactions with Microsoft Graph API for SharePoint
 """
 
+import io
 import json
 import time
 from standards_chat.utils import safe_print, safe_str
@@ -113,8 +114,8 @@ class SharePointClient:
             log_path = os.path.join(extension_dir, 'config', 'debug.log')
             
             timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            with open(log_path, 'a') as f:
-                f.write("[{}] {}\n".format(timestamp, message))
+            with io.open(log_path, 'a', encoding='utf-8') as f:
+                f.write(u"[{}] {}\n".format(timestamp, message))
         except Exception as e:
             # Fallback to print if file write fails
             safe_print("Logging failed: {}".format(safe_str(e)))
