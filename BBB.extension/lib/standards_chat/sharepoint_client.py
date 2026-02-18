@@ -198,7 +198,7 @@ class SharePointClient:
             return self._access_token
             
         except Exception as e:
-            self._log_debug("Error getting access token: {}".format(str(e)))
+            self._log_debug("Error getting access token: {}".format(safe_str(e)))
             import traceback
             # traceback.print_exc() # Avoid printing to console
             raise
@@ -254,7 +254,7 @@ class SharePointClient:
             self._log_debug("Site Pages list not found")
             return None
         except Exception as e:
-            self._log_debug("Error getting Site Pages list ID: {}".format(str(e)))
+            self._log_debug("Error getting Site Pages list ID: {}".format(safe_str(e)))
             return None
 
     def _fetch_content_from_list_item(self, page_id, page_filename=None):
@@ -355,7 +355,7 @@ class SharePointClient:
                 
             return ""
         except Exception as e:
-            self._log_debug("Error in fallback fetch: {}".format(str(e)))
+            self._log_debug("Error in fallback fetch: {}".format(safe_str(e)))
             return ""
 
     def _get_site_id(self):
@@ -411,7 +411,7 @@ class SharePointClient:
             return self._site_id
             
         except Exception as e:
-            self._log_debug("Error getting site ID: {}".format(str(e)))
+            self._log_debug("Error getting site ID: {}".format(safe_str(e)))
             import traceback
             # traceback.print_exc()
             raise
@@ -464,7 +464,7 @@ class SharePointClient:
             return pages
             
         except Exception as e:
-            self._log_debug("Error getting pages metadata: {}".format(str(e)))
+            self._log_debug("Error getting pages metadata: {}".format(safe_str(e)))
             return []
 
     def search_standards(self, query, max_results=5):
@@ -575,14 +575,14 @@ class SharePointClient:
                         break
                         
                 except Exception as e:
-                    self._log_debug("Error processing page {}: {}".format(hit.get('resource', {}).get('webUrl', 'unknown'), str(e)))
+                    self._log_debug("Error processing page {}: {}".format(hit.get('resource', {}).get('webUrl', 'unknown'), safe_str(e)))
                     continue
             
             self._log_debug("Returning {} relevant pages".format(len(relevant_pages)))
             return relevant_pages
             
         except Exception as e:
-            self._log_debug("SharePoint search failed: {}".format(str(e)))
+            self._log_debug("SharePoint search failed: {}".format(safe_str(e)))
             import traceback
             # traceback.print_exc()
             return []

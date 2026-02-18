@@ -431,7 +431,7 @@ class StandardsChatWindow(Window):
             # Reload config to get new values
             self.config = ConfigManager()
         except Exception as e:
-            safe_print("Error opening settings: {}".format(str(e)))
+            safe_print("Error opening settings: {}".format(safe_str(e)))
 
     def _add_welcome_message(self):
         """Add a dynamic welcome message with suggested prompts"""
@@ -541,7 +541,7 @@ class StandardsChatWindow(Window):
                     chip.Click += self._on_suggested_prompt_click
                     prompts_panel.Children.Add(chip)
                 except Exception as e:
-                    print("Error creating prompt chip: {}".format(str(e)))
+                    safe_print(u"Error creating prompt chip: {}".format(safe_str(e)))
 
             stack.Children.Add(prompts_panel)
 
@@ -1698,19 +1698,25 @@ class StandardsChatWindow(Window):
                     if actions:
                         self._add_action_buttons(self.streaming_border, actions)
                 
-                # Add subdued source links below bubble
-                if sources:
+                # Add subdued source links below bubble.
+                # Do not show sources when the DCT fallback button is active --
+                # those results are below the confidence threshold and would be misleading.
+                show_dct = getattr(self, '_show_dct_button', False)
+                if sources and not show_dct:
                     sources_panel = self._create_sources_panel(sources)
                     if sources_panel and hasattr(self, 'streaming_content_stack'):
                         self.streaming_content_stack.Children.Add(sources_panel)
                 
-                # Show DCT button if search confidence was too low to reliably answer
+                # Show DCT button only when search confidence was too low AND Claude
+                # did not surface any sources in its response. If sources are present
+                # the response was useful, so the fallback button should not appear.
                 try:
-                    if getattr(self, '_show_dct_button', False):
+                    if show_dct and not sources:
                         self._add_dct_ticket_panel()
-                        self._show_dct_button = False
                 except Exception as detect_err:
                     safe_print(u"Error showing DCT panel: {}".format(safe_str(detect_err)))
+                finally:
+                    self._show_dct_button = False
             
             # Scroll to bottom
             self.message_scrollviewer.ScrollToBottom()
