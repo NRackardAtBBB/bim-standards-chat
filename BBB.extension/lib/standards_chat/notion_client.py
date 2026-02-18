@@ -14,6 +14,17 @@ from System.Net.Http.Headers import MediaTypeWithQualityHeaderValue
 from System.Text import Encoding
 
 
+def _safe_print(message):
+    """Print message safely, handling Unicode errors in IronPython"""
+    try:
+        print(message)
+    except UnicodeEncodeError:
+        try:
+            print(message.encode('ascii', 'replace').decode('ascii'))
+        except:
+            pass
+
+
 class NotionClient:
     """Client for interacting with Notion API"""
     
@@ -78,7 +89,7 @@ class NotionClient:
                     
             except Exception as e:
                 # Log error but continue with other pages
-                print("Error processing page {}: {}".format(
+                _safe_print("Error processing page {}: {}".format(
                     result.get('id', 'unknown'), 
                     str(e)
                 ))
@@ -113,7 +124,7 @@ class NotionClient:
             
             # If 404, the integration may not have access to this database
             if response.StatusCode.value__ == 404:
-                print("Database not accessible, falling back to search API")
+                _safe_print("Database not accessible, falling back to search API")
                 return self._search_and_filter(query)
             
             response.EnsureSuccessStatusCode()
@@ -123,7 +134,7 @@ class NotionClient:
             all_results = data.get('results', [])
             
         except Exception as e:
-            print("Database query failed: {}, falling back to search".format(str(e)))
+            _safe_print("Database query failed: {}, falling back to search".format(str(e)))
             return self._search_and_filter(query)
         
         # Filter results by query match in title

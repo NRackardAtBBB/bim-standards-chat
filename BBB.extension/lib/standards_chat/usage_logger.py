@@ -6,6 +6,7 @@ Tracks usage analytics for Standards Chat
 
 import json
 import os
+import io
 import time
 import base64
 from datetime import datetime, timedelta
@@ -150,10 +151,11 @@ class UsageLogger:
     def _write_local_log(self, entry):
         """Write entry to local log file"""
         try:
-            with open(self.local_log_file, 'a') as f:
-                f.write(json.dumps(entry) + '\n')
+            with io.open(self.local_log_file, 'a', encoding='utf-8') as f:
+                f.write(json.dumps(entry, ensure_ascii=False) + u'\n')
         except Exception as e:
-            print("Error writing local log: {}".format(str(e)))
+            # Use safe_print to avoid Unicode errors in error messages
+            self._safe_print("Error writing local log: {}".format(str(e)))
     
     def _write_central_log(self, entry, username, session_id):
         """Write entry to central network location (session specific file)"""
@@ -180,11 +182,11 @@ class UsageLogger:
             
             # Append to session file (list of objects)
             # Using JSONL is safer for appending and PowerBI supports it
-            with open(file_path, 'a') as f:
-                f.write(json.dumps(entry) + '\n')
-                
+            with io.open(file_path, 'a', encoding='utf-8') as f:
+                f.write(json.dumps(entry, ensure_ascii=False) + u'\n')
+
         except Exception as e:
-            print("Could not write to central log: {}".format(str(e)))
+            self._safe_print("Could not write to central log: {}".format(str(e)))
 
     def _save_screenshot(self, base64_str, session_id, timestamp):
         """Save screenshot to central directory"""
@@ -207,9 +209,20 @@ class UsageLogger:
                 
             return file_path
         except Exception as e:
-            print("Error saving screenshot: {}".format(str(e)))
+            self._safe_print("Error saving screenshot: {}".format(str(e)))
             return None
-    
+
+    def _safe_print(self, message):
+        """Print message safely, handling Unicode errors"""
+        try:
+            print(message)
+        except UnicodeEncodeError:
+            # Fallback: encode to ASCII with replacement
+            try:
+                print(message.encode('ascii', 'replace').decode('ascii'))
+            except:
+                pass  # Silently fail if all else fails
+
     def _get_anonymous_user_id(self):
         """Generate anonymous user ID from username + machine"""
         try:
@@ -325,6 +338,6 @@ class UsageLogger:
             )
             
         except Exception as e:
-            print("Error calculating stats: {}".format(str(e)))
+            self._safe_print("Error calculating stats: {}".format(str(e)))
         
         return stats

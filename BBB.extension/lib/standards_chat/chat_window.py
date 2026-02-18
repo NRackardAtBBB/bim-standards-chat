@@ -24,9 +24,22 @@ from System.Windows.Threading import Dispatcher
 from System import TimeSpan, Uri
 import System
 import os
+import io
 import sys
 import time
 import json
+
+
+def _safe_print(message):
+    """Print message safely, handling Unicode errors in IronPython"""
+    try:
+        print(message)
+    except UnicodeEncodeError:
+        try:
+            # Replace non-ASCII characters with ?
+            print(message.encode('ascii', 'replace').decode('ascii'))
+        except:
+            pass  # Silently fail if all else fails
 
 # Add lib path
 script_dir = os.path.dirname(__file__)
@@ -53,7 +66,7 @@ class StandardsChatWindow(Window):
             os.path.dirname(os.path.dirname(__file__)),
             'ui', 'chat_window.xaml'
         )
-        with open(xaml_path, 'r') as f:
+        with io.open(xaml_path, 'r', encoding='utf-8') as f:
             xaml_content = f.read()
         
         # Parse XAML - this creates a complete window
@@ -126,7 +139,7 @@ class StandardsChatWindow(Window):
                 pass
             except Exception as e:
                 # Other errors should be logged
-                print("Vector DB initialization error: {}".format(str(e)))
+                _safe_print("Vector DB initialization error: {}".format(str(e)))
             
             # Initialize usage logger
             central_log_dir = self.config.get('logging', 'central_log_dir')
@@ -149,10 +162,10 @@ class StandardsChatWindow(Window):
             try:
                 index_path = os.path.join(self.config.config_dir, 'sharepoint_index.json')
                 if os.path.exists(index_path):
-                    with open(index_path, 'r') as f:
+                    with io.open(index_path, 'r', encoding='utf-8') as f:
                         self.sharepoint_index = json.load(f)
             except Exception as e:
-                print("Error loading SharePoint index: {}".format(str(e)))
+                _safe_print("Error loading SharePoint index: {}".format(str(e)))
             
         except Exception as e:
             # Show error in status
@@ -193,7 +206,7 @@ class StandardsChatWindow(Window):
             psi.UseShellExecute = True
             Process.Start(psi)
         except Exception as e:
-            print("Error opening URL: {}".format(str(e)))
+            _safe_print("Error opening URL: {}".format(str(e)))
     
     def _load_header_icon(self):
         """Load the icon from the button folder into the header"""
@@ -220,10 +233,10 @@ class StandardsChatWindow(Window):
                 bitmap.EndInit()
                 self.header_icon.Source = bitmap
             else:
-                print("Icon file not found at: {}".format(icon_path))
+                _safe_print("Icon file not found at: {}".format(icon_path))
         except Exception as e:
             # Print error for debugging
-            print("Could not load header icon: {}".format(str(e)))
+            _safe_print("Could not load header icon: {}".format(str(e)))
     
     def on_send_click(self, sender, args):
         """Handle send button click"""
@@ -280,7 +293,7 @@ class StandardsChatWindow(Window):
                 self.refresh_history_list()
                 
         except Exception as e:
-            print("Error deleting session: {}".format(str(e)))
+            _safe_print("Error deleting session: {}".format(str(e)))
     
     def on_new_chat_click(self, sender, args):
         """Start a new chat session"""
@@ -674,7 +687,7 @@ class StandardsChatWindow(Window):
                         if new_title:
                             self.session_title = new_title
                     except Exception as e:
-                        print("Title generation failed: " + str(e))
+                        _safe_print("Title generation failed: " + str(e))
                 
                 # Auto-save session after each exchange
                 self.save_current_session()
@@ -926,7 +939,7 @@ class StandardsChatWindow(Window):
     
     def _add_action_buttons(self, parent_border, actions):
         """Add action buttons to response bubble"""
-        print("DEBUG: _add_action_buttons called with {} actions".format(len(actions)))
+        _safe_print("DEBUG: _add_action_buttons called with {} actions".format(len(actions)))
         
         from System.Windows.Controls import Button, StackPanel
         
@@ -937,16 +950,16 @@ class StandardsChatWindow(Window):
             # Get the existing textblock and remove it from border
             existing_textblock = parent_border.Child
             parent_border.Child = None  # CRITICAL: Remove from border first!
-            print("DEBUG: Got existing textblock and removed from border")
+            _safe_print("DEBUG: Got existing textblock and removed from border")
             
             # Create new stack panel to hold text + buttons
             stack = StackPanel()
             stack.Children.Add(existing_textblock)
-            print("DEBUG: Created stack panel and added textblock")
+            _safe_print("DEBUG: Created stack panel and added textblock")
             
             # Add buttons for each action
             for i, action_data in enumerate(actions):
-                print("DEBUG: Creating button {} for action type: {}".format(
+                _safe_print("DEBUG: Creating button {} for action type: {}".format(
                     i, action_data.get('type', 'unknown')
                 ))
                 button = Button()
@@ -960,7 +973,7 @@ class StandardsChatWindow(Window):
                 button.Click += self.on_action_button_click
                 
                 stack.Children.Add(button)
-                print("DEBUG: Button {} added to stack".format(i))
+                _safe_print("DEBUG: Button {} added to stack".format(i))
                 
                 # Set first button as active (can be triggered with Enter)
                 if i == 0:
@@ -968,10 +981,10 @@ class StandardsChatWindow(Window):
             
             # Set stack panel as border content
             parent_border.Child = stack
-            print("DEBUG: Stack panel set as border child - {} children total".format(stack.Children.Count))
+            _safe_print("DEBUG: Stack panel set as border child - {} children total".format(stack.Children.Count))
             
         except Exception as e:
-            print("DEBUG: Error in _add_action_buttons: {}".format(str(e)))
+            _safe_print("DEBUG: Error in _add_action_buttons: {}".format(str(e)))
             import traceback
             traceback.print_exc()
     
@@ -1021,7 +1034,7 @@ class StandardsChatWindow(Window):
             try:
                 self.Dispatcher.Invoke(System.Action(update_ui))
             except Exception as e:
-                print("Error updating UI: {}".format(str(e)))
+                _safe_print("Error updating UI: {}".format(str(e)))
         
         try:
             # Check if this is a workflow

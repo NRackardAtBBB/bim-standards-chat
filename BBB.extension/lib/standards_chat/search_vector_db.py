@@ -60,11 +60,11 @@ def main():
             deduplicate=True
         )
         
-        # Return results as JSON
+        # Return results as JSON (ensure_ascii=False to properly encode Unicode)
         print(json.dumps({
             'success': True,
             'results': results
-        }))
+        }, ensure_ascii=False))
         return 0
         
     except Exception as e:

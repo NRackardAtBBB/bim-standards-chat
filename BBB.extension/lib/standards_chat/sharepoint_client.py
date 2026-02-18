@@ -5,7 +5,19 @@ Handles all interactions with Microsoft Graph API for SharePoint
 """
 
 import json
+import io
 import time
+
+
+def _safe_print(message):
+    """Print message safely, handling Unicode errors"""
+    try:
+        print(message)
+    except UnicodeEncodeError:
+        try:
+            print(message.encode('ascii', 'replace').decode('ascii'))
+        except:
+            pass
 
 # Try to import IronPython .NET bridge (for pyRevit/IronPython)
 # Fall back to standard Python requests if not available
@@ -111,12 +123,12 @@ class SharePointClient:
             log_path = os.path.join(extension_dir, 'config', 'debug.log')
             
             timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            with open(log_path, 'a') as f:
-                f.write("[{}] {}\n".format(timestamp, message))
+            with io.open(log_path, 'a', encoding='utf-8') as f:
+                f.write(u"[{}] {}\n".format(timestamp, message))
         except Exception as e:
             # Fallback to print if file write fails
-            print("Logging failed: {}".format(str(e)))
-            print(message)
+            _safe_print("Logging failed: {}".format(str(e)))
+            _safe_print(message)
 
     def _get_access_token(self):
         """Get or refresh OAuth2 access token"""

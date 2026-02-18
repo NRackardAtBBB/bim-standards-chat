@@ -5,8 +5,20 @@ Manages chat session history storage and retrieval
 """
 
 import json
+import io
 import os
 from datetime import datetime
+
+
+def _safe_print(message):
+    """Print message safely, handling Unicode errors"""
+    try:
+        print(message)
+    except UnicodeEncodeError:
+        try:
+            print(message.encode('ascii', 'replace').decode('ascii'))
+        except:
+            pass
 
 
 class HistoryManager:
@@ -35,7 +47,7 @@ class HistoryManager:
             try:
                 os.makedirs(self.history_dir)
             except Exception as e:
-                print("Error creating history directory: {}".format(str(e)))
+                _safe_print("Error creating history directory: {}".format(str(e)))
     
     def create_new_session(self):
         """
@@ -72,10 +84,11 @@ class HistoryManager:
         filepath = os.path.join(self.history_dir, '{}.json'.format(session_id))
         
         try:
-            with open(filepath, 'w') as f:
-                json.dump(session_data, f, indent=2)
+            with io.open(filepath, 'w', encoding='utf-8') as f:
+                # Use ensure_ascii=False to properly write Unicode characters
+                f.write(json.dumps(session_data, indent=2, ensure_ascii=False))
         except Exception as e:
-            print("Error saving session: {}".format(str(e)))
+            _safe_print("Error saving session: {}".format(str(e)))
     
     def load_session(self, session_id):
         """
@@ -93,10 +106,10 @@ class HistoryManager:
             return None
         
         try:
-            with open(filepath, 'r') as f:
+            with io.open(filepath, 'r', encoding='utf-8') as f:
                 return json.load(f)
         except Exception as e:
-            print("Error loading session: {}".format(str(e)))
+            _safe_print("Error loading session: {}".format(str(e)))
             return None
     
     def list_sessions(self):
@@ -116,7 +129,7 @@ class HistoryManager:
                 if filename.endswith('.json'):
                     filepath = os.path.join(self.history_dir, filename)
                     try:
-                        with open(filepath, 'r') as f:
+                        with io.open(filepath, 'r', encoding='utf-8') as f:
                             data = json.load(f)
                             sessions.append({
                                 'session_id': data.get('session_id', filename[:-5]),
@@ -127,7 +140,7 @@ class HistoryManager:
                         # Skip corrupted files
                         continue
         except Exception as e:
-            print("Error listing sessions: {}".format(str(e)))
+            _safe_print("Error listing sessions: {}".format(str(e)))
         
         # Sort by timestamp, newest first
         sessions.sort(key=lambda x: x['timestamp'], reverse=True)
@@ -151,7 +164,7 @@ class HistoryManager:
                 os.remove(filepath)
                 return True
             except Exception as e:
-                print("Error deleting session: {}".format(str(e)))
+                _safe_print("Error deleting session: {}".format(str(e)))
                 return False
         
         return False
@@ -181,6 +194,6 @@ class HistoryManager:
                     except:
                         continue
         except Exception as e:
-            print("Error clearing history: {}".format(str(e)))
+            _safe_print("Error clearing history: {}".format(str(e)))
             
         return count

@@ -5,6 +5,7 @@ Handles loading and accessing configuration
 """
 
 import os
+import io
 import json
 
 
@@ -38,7 +39,7 @@ class ConfigManager:
                 "Configuration file not found: {}".format(filepath)
             )
         
-        with open(filepath, 'r') as f:
+        with io.open(filepath, 'r', encoding='utf-8') as f:
             return json.load(f)
     
     def get(self, section, key, default=None):
@@ -92,8 +93,8 @@ class ConfigManager:
     def save(self):
         """Save current configuration to config.json"""
         filepath = os.path.join(self.config_dir, 'config.json')
-        with open(filepath, 'w') as f:
-            json.dump(self.config, f, indent=2)
+        with io.open(filepath, 'w', encoding='utf-8') as f:
+            f.write(json.dumps(self.config, indent=2, ensure_ascii=False))
     
     def get_api_key(self, service):
         """Get API key for a service"""

@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C \"C:\\\\Users\\\\nrackard\\\\.claude-worktrees\\\\bim-standards-chat\\\\peaceful-northcutt\" diff --stat)"
+    ]
+  }
+}

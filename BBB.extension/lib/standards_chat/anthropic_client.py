@@ -14,6 +14,17 @@ from System.Net.Http.Headers import MediaTypeWithQualityHeaderValue
 from System.Text import Encoding
 
 
+def _safe_print(message):
+    """Print message safely, handling Unicode errors in IronPython"""
+    try:
+        print(message)
+    except UnicodeEncodeError:
+        try:
+            print(message.encode('ascii', 'replace').decode('ascii'))
+        except:
+            pass
+
+
 class AnthropicClient:
     """Client for interacting with Anthropic API"""
     
@@ -118,7 +129,7 @@ class AnthropicClient:
                 return None
                 
         except Exception as e:
-            print("Error generating title: {}".format(str(e)))
+            _safe_print("Error generating title: {}".format(str(e)))
             return None
 
     def get_search_keywords(self, user_query, index_data=None):
@@ -196,11 +207,11 @@ Return ONLY the keywords separated by spaces. Do not include any other text.""".
                     'output_tokens': output_tokens
                 }
             else:
-                print("Keyword extraction failed: " + response_text)
+                _safe_print("Keyword extraction failed: " + response_text)
                 return {'keywords': user_input, 'input_tokens': 0, 'output_tokens': 0}
                 
         except Exception as e:
-            print("Error extracting keywords: {}".format(str(e)))
+            _safe_print("Error extracting keywords: {}".format(str(e)))
             return {'keywords': user_input, 'input_tokens': 0, 'output_tokens': 0}
     
     def get_response_stream(self, user_query, notion_pages, revit_context=None, 
@@ -566,7 +577,7 @@ If the standards don't fully address the question, acknowledge this and provide 
                         output_tokens = int(usage.get('output_tokens', 0) or 0)
 
             except Exception as e:
-                print("Error parsing stream chunk: {}".format(str(e)))
+                _safe_print("Error parsing stream chunk: {}".format(str(e)))
                 continue
         
         reader.Close()

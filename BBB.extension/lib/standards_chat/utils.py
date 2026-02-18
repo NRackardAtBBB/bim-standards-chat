@@ -21,6 +21,17 @@ import io
 import ctypes
 import System.Diagnostics
 
+
+def _safe_print(message):
+    """Print message safely, handling Unicode errors in IronPython"""
+    try:
+        print(message)
+    except UnicodeEncodeError:
+        try:
+            print(message.encode('ascii', 'replace').decode('ascii'))
+        except:
+            pass
+
 # Define RECT structure for Windows API
 class RECT(ctypes.Structure):
     _fields_ = [
@@ -72,7 +83,7 @@ def get_revit_window_bounds():
             return (rect.left, rect.top, width, height)
             
     except Exception as e:
-        print("Error getting window bounds: {}".format(str(e)))
+        _safe_print("Error getting window bounds: {}".format(str(e)))
         
     return None
 
@@ -146,13 +157,13 @@ def capture_revit_screenshot():
                     time.sleep(retry_delay)
                     continue
                 else:
-                    print("Screenshot capture failed after {} retries: {}".format(max_retries, str(e)))
+                    _safe_print("Screenshot capture failed after {} retries: {}".format(max_retries, str(e)))
                     return None
         
         return None
         
     except Exception as e:
-        print("Error capturing screenshot: {}".format(str(e)))
+        _safe_print("Error capturing screenshot: {}".format(str(e)))
         import traceback
         traceback.print_exc()
         return None
@@ -227,7 +238,7 @@ def extract_revit_context():
         
     except Exception as e:
         # If any error extracting context, return None
-        print("Error extracting Revit context: {}".format(str(e)))
+        _safe_print("Error extracting Revit context: {}".format(str(e)))
         return None
 
 
@@ -339,7 +350,7 @@ def _extract_element_details(element, doc):
         return info
         
     except Exception as e:
-        print("Error extracting element details: {}".format(str(e)))
+        _safe_print("Error extracting element details: {}".format(str(e)))
         return None
 
 
@@ -380,7 +391,7 @@ def _extract_all_parameters(element, doc):
                     params[param_name] = param_info
     
     except Exception as e:
-        print("Error extracting parameters: {}".format(str(e)))
+        _safe_print("Error extracting parameters: {}".format(str(e)))
     
     return params
 
@@ -447,7 +458,7 @@ def _get_parameter_value(parameter, doc):
         return parameter.AsValueString()
         
     except Exception as e:
-        print("Error getting parameter value: {}".format(str(e)))
+        _safe_print("Error getting parameter value: {}".format(str(e)))
         return None
 
 
