@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nUI improvements: avatars, personalized greetings, subdued references, and visual polish\n\n- Widen window to 750px to accommodate auto-opening chat history sidebar \\(>3 chats\\)\n- Add personalized welcome messages cycling through greetings using Windows username\n- Add 2-3 clickable suggested prompt chips below welcome message \\(configurable in config.json\\)\n- Add user initials avatar and bot Kodama avatar next to all messages\n- Change user message bubbles from blue to grey/black text for readability\n- Make reference document links subdued \\(grey, smaller font, SharePoint icon\\)\n- Remove dates from chat history sidebar; show date when clicking into a session\n- Allow longer chat history titles \\(2-line wrap\\)\n- Send button greyed out when input is empty, blue when text present\n- Loading animation: status text on same line as dots\n- Kodama logo in header gets light blue circle background\n- Change status indicator from \"Ready\" to \"Active\"\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git push:*)",
+      "Bash(gh pr create:*)",
+      "Bash(where:*)",
+      "Bash(git fetch:*)",
+      "Bash(git merge:*)",
+      "Bash(git stash:*)"
+    ]
+  }
+}
