@@ -30,11 +30,19 @@ def safe_str(obj):
                     # Give up and use repr
                     return unicode(repr(obj))
     
+    # Use type-name detection to avoid IronPython isinstance bugs (same pattern
+    # already applied above for 'str' and 'unicode' types).
     try:
-        if isinstance(obj, Exception):
-            # Try args first as they are often the source of the message
-            if hasattr(obj, 'args') and obj.args:
-                return u", ".join([safe_str(arg) for arg in obj.args])
+        _is_exc = ('Error' in type_name or 'Exception' in type_name or
+                   'Warning' in type_name or 'error' in type_name or
+                   hasattr(obj, 'args'))
+        if _is_exc:
+            try:
+                _args = getattr(obj, 'args', None)
+                if _args:
+                    return u", ".join([safe_str(a) for a in _args])
+            except Exception:
+                pass
         return unicode(obj)
     except Exception:
         try:
@@ -197,7 +205,7 @@ def get_revit_window_bounds():
             return (rect.left, rect.top, width, height)
             
     except Exception as e:
-        print("Error getting window bounds: {}".format(str(e)))
+        safe_print(u"Error getting window bounds: {}".format(safe_str(e)))
         
     return None
 
@@ -271,13 +279,13 @@ def capture_revit_screenshot():
                     time.sleep(retry_delay)
                     continue
                 else:
-                    print("Screenshot capture failed after {} retries: {}".format(max_retries, str(e)))
+                    safe_print(u"Screenshot capture failed after {} retries: {}".format(max_retries, safe_str(e)))
                     return None
         
         return None
         
     except Exception as e:
-        print("Error capturing screenshot: {}".format(str(e)))
+        safe_print(u"Error capturing screenshot: {}".format(safe_str(e)))
         import traceback
         traceback.print_exc()
         return None
@@ -352,7 +360,7 @@ def extract_revit_context():
         
     except Exception as e:
         # If any error extracting context, return None
-        print("Error extracting Revit context: {}".format(str(e)))
+        safe_print(u"Error extracting Revit context: {}".format(safe_str(e)))
         return None
 
 
@@ -464,7 +472,7 @@ def _extract_element_details(element, doc):
         return info
         
     except Exception as e:
-        print("Error extracting element details: {}".format(str(e)))
+        safe_print(u"Error extracting element details: {}".format(safe_str(e)))
         return None
 
 
@@ -505,7 +513,7 @@ def _extract_all_parameters(element, doc):
                     params[param_name] = param_info
     
     except Exception as e:
-        print("Error extracting parameters: {}".format(str(e)))
+        safe_print(u"Error extracting parameters: {}".format(safe_str(e)))
     
     return params
 
@@ -531,7 +539,7 @@ def _get_parameter_value(parameter, doc):
                 try:
                     return value.encode('utf-8', 'replace').decode('utf-8')
                 except:
-                    return str(value)
+                    return safe_str(value)
             return value
             
         elif storage_type == DB.StorageType.Integer:
@@ -572,7 +580,7 @@ def _get_parameter_value(parameter, doc):
         return parameter.AsValueString()
         
     except Exception as e:
-        print("Error getting parameter value: {}".format(str(e)))
+        safe_print(u"Error getting parameter value: {}".format(safe_str(e)))
         return None
 
 

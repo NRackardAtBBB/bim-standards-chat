@@ -6,6 +6,7 @@ Handles all interactions with Notion API
 
 import json
 import clr
+from standards_chat.utils import safe_str, safe_print
 clr.AddReference('System.Net.Http')
 
 import System
@@ -78,9 +79,9 @@ class NotionClient:
                     
             except Exception as e:
                 # Log error but continue with other pages
-                print("Error processing page {}: {}".format(
+                safe_print(u"Error processing page {}: {}".format(
                     result.get('id', 'unknown'), 
-                    str(e)
+                    safe_str(e)
                 ))
                 continue
         
@@ -123,7 +124,7 @@ class NotionClient:
             all_results = data.get('results', [])
             
         except Exception as e:
-            print("Database query failed: {}, falling back to search".format(str(e)))
+            safe_print(u"Database query failed: {}, falling back to search".format(safe_str(e)))
             return self._search_and_filter(query)
         
         # Filter results by query match in title
