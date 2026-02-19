@@ -131,11 +131,13 @@ class VectorDBClient:
         if not developer_mode:
             return True  # If not in developer mode, available to all
 
-        # Check if current user is in whitelist
-        whitelist = self.config.get_config('vector_search.developer_whitelist', [])
+        # Whitelist lives in api_keys.json (gitignored) under 'admin_whitelist'.
+        # Falls back to config.json developer_whitelist for backwards compatibility.
+        whitelist = self.config.api_keys.get('admin_whitelist', None)
+        if whitelist is None:
+            whitelist = self.config.get_config('vector_search.developer_whitelist', [])
 
         # Safety: an empty whitelist would lock everyone out -- treat it as allow-all.
-        # This prevents a config save bug from silently breaking vector search.
         if not whitelist:
             return True
 

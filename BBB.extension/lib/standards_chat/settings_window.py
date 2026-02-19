@@ -192,8 +192,12 @@ class SettingsWindow(forms.WPFWindow):
             self.notion_group.Visibility = System.Windows.Visibility.Visible
     
     def _is_admin_user(self):
-        """Check if current Windows user is in the admin/developer whitelist"""
-        whitelist = self.config.get('vector_search', {}).get('developer_whitelist', [])
+        """Check if current Windows user is in the admin whitelist (stored in api_keys.json)"""
+        # admin_whitelist lives in api_keys.json (gitignored) so it is never committed to the repo.
+        # Falls back to developer_whitelist in config.json for backwards compatibility.
+        whitelist = self.api_keys.get('admin_whitelist', None)
+        if whitelist is None:
+            whitelist = self.config.get('vector_search', {}).get('developer_whitelist', [])
         current_user = os.environ.get('USERNAME', '').lower()
         return current_user in [u.lower() for u in whitelist]
 

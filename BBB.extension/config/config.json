@@ -88,7 +88,7 @@
     "db_path": "vector_db", 
     "hybrid_search_weight_keyword": 0.29999999999999999, 
     "hybrid_search_weight_semantic": 0.69999999999999996, 
-    "developer_whitelist": ["nrackard"], 
+    "developer_whitelist": [], 
     "failed_pdf_count": 0, 
     "indexed_video_count": 202, 
     "embedding_model": "text-embedding-3-small", 
