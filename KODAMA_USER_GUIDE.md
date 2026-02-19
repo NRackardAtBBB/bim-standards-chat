@@ -278,5 +278,5 @@ The DCT Team is responsible for maintaining and improving Kodama.
 
 ---
 
-*Kodama is an internal tool developed by the BBB Digital Construction Technology (DCT) Team.*
+*Kodama is an internal tool developed by the BBB Design and Construction Technology (DCT) Team.*
 *For technical documentation, see the developer README.*

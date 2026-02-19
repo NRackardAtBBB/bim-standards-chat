@@ -181,6 +181,11 @@ class SettingsWindow(forms.WPFWindow):
         self.enable_vector_search.IsChecked = self.config.get('features', {}).get('enable_vector_search', False)
         self._update_vector_search_visibility()
         self._update_vector_search_stats()
+
+        # Search thresholds
+        vs_config = self.config.get('vector_search', {})
+        self.similarity_threshold.Text = str(vs_config.get('similarity_threshold', 0.5))
+        self.confidence_threshold.Text = str(vs_config.get('confidence_threshold', 0.5))
     
     def source_changed(self, sender, args):
         """Handle source selection change"""
@@ -602,6 +607,15 @@ class SettingsWindow(forms.WPFWindow):
                 self.config['logging']['enabled'] = bool(self.logging_enabled.IsChecked)
                 self.config['logging']['analytics_enabled'] = bool(self.analytics_enabled.IsChecked)
                 self.config['logging']['central_log_path'] = self.central_log_path.Text.strip()
+
+                # Update search thresholds
+                if 'vector_search' not in self.config:
+                    self.config['vector_search'] = {}
+                try:
+                    self.config['vector_search']['similarity_threshold'] = float(self.similarity_threshold.Text)
+                    self.config['vector_search']['confidence_threshold'] = float(self.confidence_threshold.Text)
+                except Exception:
+                    pass
 
                 self.config_manager.save_api_keys()
 

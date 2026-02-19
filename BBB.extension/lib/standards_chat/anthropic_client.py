@@ -392,10 +392,10 @@ Return ONLY the keywords separated by spaces. Do not include any other text.""".
             context_parts.append(
                 u"# Relevant BBB Documents\n\n"
                 u"No relevant BBB standards documents were found for this query.\n"
-                u"If the question is about BBB-specific standards, practices, or settings, "
-                u"do not invent an answer -- tell the user you don't have that information "
-                u"in the standards and suggest checking with their BIM Manager or consulting "
-                u"the relevant standards page directly.\n\n"
+                u"Do NOT answer from general Revit knowledge, product documentation, or CAD workflows. "
+                u"Do NOT reference training videos or other documents that were not retrieved. "
+                u"Tell the user clearly that this topic is not covered in the BBB standards, "
+                u"and suggest they open a ticket with DCT or check with their BIM Manager.\n\n"
             )
 
         # Add Revit context if available

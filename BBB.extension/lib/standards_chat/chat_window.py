@@ -1248,9 +1248,9 @@ class StandardsChatWindow(forms.WPFWindow):
                     debug_log("search_standards returned {} pages".format(len(relevant_pages)))
                 
                 # Determine if search results are too low-confidence to answer the question.
-                # A top score below 0.4 means the best match is a weak semantic overlap --
-                # Claude will almost certainly not have a useful answer.
-                LOW_CONFIDENCE_THRESHOLD = 0.4
+                # A top score below this threshold means the best match is a weak semantic overlap --
+                # Claude will almost certainly not have a useful answer. Configurable in admin settings.
+                LOW_CONFIDENCE_THRESHOLD = float(self.config.get('vector_search', 'confidence_threshold', default=0.50))
                 top_score = float(relevant_pages[0].get('score', 0)) if relevant_pages else 0.0
                 self._show_dct_button = (top_score < LOW_CONFIDENCE_THRESHOLD)
                 debug_log("top search score={:.4f}, show_dct_button={}".format(top_score, self._show_dct_button))
@@ -1704,19 +1704,43 @@ class StandardsChatWindow(forms.WPFWindow):
                         self._add_action_buttons(self.streaming_border, actions)
                 
                 # Add subdued source links below bubble.
-                # Do not show sources when the DCT fallback button is active --
-                # those results are below the confidence threshold and would be misleading.
+                # Sources are always shown when present -- they provide useful context
+                # even when the DCT button is also active (e.g. adjacent topic references).
                 show_dct = getattr(self, '_show_dct_button', False)
-                if sources and not show_dct:
+
+                # Secondary trigger: if Claude's response signals that the topic
+                # isn't in the standards (even if search returned a borderline score),
+                # treat it as a low-confidence result and show the DCT button.
+                # This catches cases where semantically-adjacent content (e.g. DWG export)
+                # passes the score threshold but Claude correctly declines to answer.
+                _response_lower = self.streaming_text.lower() if isinstance(self.streaming_text, basestring) else u""
+                _no_answer_phrases = [
+                    "not in the bbb standards",
+                    "isn't in the bbb standards",
+                    "not covered in the bbb",
+                    "isn't covered in",
+                    "is not covered in",
+                    "not something that's covered",
+                    "not something that is covered",
+                    "don't have that in the standards",
+                    "i don't have that",
+                    "i don't have anything",
+                    "not addressed in",
+                    "isn't addressed in",
+                ]
+                if not show_dct and any(phrase in _response_lower for phrase in _no_answer_phrases):
+                    show_dct = True
+                if sources:
                     sources_panel = self._create_sources_panel(sources)
                     if sources_panel and hasattr(self, 'streaming_content_stack'):
                         self.streaming_content_stack.Children.Add(sources_panel)
                 
-                # Show DCT button only when search confidence was too low AND Claude
-                # did not surface any sources in its response. If sources are present
-                # the response was useful, so the fallback button should not appear.
+                # Show DCT button whenever search confidence was too low, regardless of
+                # whether Claude cited sources. Low-confidence results can still produce
+                # citations from loosely-related content -- the ticket button should always
+                # appear so the user knows to escalate.
                 try:
-                    if show_dct and not sources:
+                    if show_dct:
                         self._add_dct_ticket_panel()
                 except Exception as detect_err:
                     safe_print(u"Error showing DCT panel: {}".format(safe_str(detect_err)))
