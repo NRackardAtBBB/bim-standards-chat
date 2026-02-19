@@ -16,7 +16,10 @@
         <SolidColorBrush x:Key="BorderColor" Color="#E0E0E0"/>
         <SolidColorBrush x:Key="TextPrimaryColor" Color="#323130"/>
         <SolidColorBrush x:Key="TextSecondaryColor" Color="#605E5C"/>
-        <SolidColorBrush x:Key="UserBubbleColor" Color="#E1DFDD"/>
+        <LinearGradientBrush x:Key="UserBubbleColor" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#0078D4" Offset="0"/>
+            <GradientStop Color="#006FBE" Offset="1"/>
+        </LinearGradientBrush>
         <SolidColorBrush x:Key="AssistantBubbleColor" Color="#FFFFFF"/>
 
         <!-- Base Styles -->
@@ -27,7 +30,7 @@
 
         <!-- Message Bubbles -->
         <Style x:Key="MessageBubbleUser" TargetType="Border">
-            <Setter Property="Background" Value="#D0D0D0"/>
+            <Setter Property="Background" Value="{StaticResource UserBubbleColor}"/>
             <Setter Property="CornerRadius" Value="12,0,12,12"/>
             <Setter Property="Padding" Value="12"/>
             <Setter Property="Margin" Value="50,5,4,5"/>
