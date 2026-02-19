@@ -389,6 +389,9 @@ class StandardsChatWindow(forms.WPFWindow):
         try:
             from standards_chat.settings_window import SettingsWindow
             settings = SettingsWindow(self.config.config_dir)
+            # Set Owner so the dialog is modal over the chat window and
+            # appears centred on top of it rather than floating behind it.
+            settings.Owner = self
             settings.ShowDialog()
             
             # Reload config to get new values
