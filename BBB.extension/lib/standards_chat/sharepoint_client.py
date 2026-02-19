@@ -749,12 +749,67 @@ class SharePointClient:
             return self._strip_html(canvas_json_str)
 
     def _strip_html(self, html):
-        """Remove HTML tags"""
+        """Convert HTML to readable plain text.
+
+        Preserves table structure by converting <tr>/<td>/<th> to readable
+        delimiters before stripping tags, and decodes common HTML entities.
+        This prevents table data from collapsing into unreadable run-on strings.
+        """
         if not html:
             return ""
         import re
-        clean = re.compile('<.*?>')
-        return re.sub(clean, '', html)
+
+        # --- Table structure: convert to pipe-delimited rows BEFORE stripping ---
+        # <th> / <td> -> ' | ' separator (leading pipe stripped later per row)
+        text = re.sub(r'<th[^>]*>', ' | ', html, flags=re.IGNORECASE)
+        text = re.sub(r'</th>', '', text, flags=re.IGNORECASE)
+        text = re.sub(r'<td[^>]*>', ' | ', text, flags=re.IGNORECASE)
+        text = re.sub(r'</td>', '', text, flags=re.IGNORECASE)
+        # <tr> / </tr> -> newline
+        text = re.sub(r'<tr[^>]*>', '', text, flags=re.IGNORECASE)
+        text = re.sub(r'</tr>', '\n', text, flags=re.IGNORECASE)
+        # Drop <thead>/<tbody>/<table> wrappers
+        text = re.sub(r'<t(?:head|body|foot|able)[^>]*>', '', text, flags=re.IGNORECASE)
+        text = re.sub(r'</t(?:head|body|foot|able)>', '', text, flags=re.IGNORECASE)
+
+        # --- Block-level tags -> newlines so paragraphs don't run together ---
+        text = re.sub(r'<br\s*/?>', '\n', text, flags=re.IGNORECASE)
+        text = re.sub(r'</(p|div|h[1-6]|li|ul|ol|blockquote)>', '\n', text, flags=re.IGNORECASE)
+
+        # --- Strip remaining tags ---
+        text = re.sub(r'<[^>]+>', '', text)
+
+        # --- Decode common HTML entities ---
+        html_entities = [
+            ('&nbsp;', ' '),
+            ('&amp;', '&'),
+            ('&lt;', '<'),
+            ('&gt;', '>'),
+            ('&quot;', '"'),
+            ('&#39;', "'"),
+            ('&mdash;', '--'),
+            ('&ndash;', '-'),
+            ('&hellip;', '...'),
+            ('&ldquo;', '"'),
+            ('&rdquo;', '"'),
+            ('&lsquo;', "'"),
+            ('&rsquo;', "'"),
+        ]
+        for entity, replacement in html_entities:
+            text = text.replace(entity, replacement)
+        # Numeric entities (&#160; style)
+        text = re.sub(r'&#(\d+);', lambda m: chr(int(m.group(1))), text)
+
+        # --- Clean up whitespace ---
+        # Trim leading ' | ' from each table row
+        lines = []
+        for line in text.splitlines():
+            line = line.strip()
+            if line.startswith('| '):
+                line = line[2:]
+            if line:
+                lines.append(line)
+        return '\n'.join(lines)
     
     def _fetch_page_content_by_id(self, page_id):
         """Fetch full content of a SharePoint page by its ID"""

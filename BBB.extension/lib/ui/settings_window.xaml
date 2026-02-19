@@ -111,6 +111,32 @@
             </Setter>
         </Style>
 
+        <Style x:Key="SubtleButtonStyle" TargetType="Button">
+            <Setter Property="Padding" Value="8,5"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Margin" Value="0"/>
+            <Setter Property="Foreground" Value="{StaticResource TextSecondaryColor}"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Foreground" Value="{StaticResource PrimaryColor}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
     </Window.Resources>
     
     <Grid Margin="20">
@@ -146,74 +172,18 @@
                         <TextBlock Text="Studio/Team (Optional):" FontWeight="Normal" Margin="0,12,0,2"/>
                         <TextBox x:Name="user_team" 
                                  ToolTip="Your studio or team name"/>
-                        
-                        <TextBlock Text="Feature Settings:" FontWeight="SemiBold" Margin="0,20,0,10" FontSize="13"/>
-                        
-                        <CheckBox x:Name="auto_include_screenshot" 
-                                  Content="Include screenshots with queries" 
+
+                        <TextBlock Text="Display Options:" FontWeight="SemiBold" Margin="0,20,0,5" FontSize="13"/>
+
+                        <CheckBox x:Name="auto_include_screenshot"
+                                  Content="Include screenshots with queries"
                                   FontWeight="Normal"
                                   ToolTip="Automatically capture and send Revit screenshots with each query"/>
-                        
-                        <CheckBox x:Name="auto_include_context" 
-                                  Content="Include Revit context (active view, worksets, selection)" 
+
+                        <CheckBox x:Name="auto_include_context"
+                                  Content="Include Revit context (active view, worksets, selection)"
                                   FontWeight="Normal"
                                   ToolTip="Send information about your current Revit session with queries"/>
-                        
-                        <CheckBox x:Name="enable_actions" 
-                                  Content="Enable executable actions (select elements, change worksets, etc.)" 
-                                  FontWeight="Normal"
-                                  ToolTip="Allow the assistant to suggest and perform actions directly in Revit"/>
-                        
-                        <CheckBox x:Name="enable_workflows" 
-                                  Content="Enable multi-step workflows" 
-                                  FontWeight="Normal"
-                                  ToolTip="Allow the assistant to suggest and execute complex multi-step workflows"/>
-                        
-                        <CheckBox x:Name="enable_vector_search" 
-                                  Content="Enable semantic search (Developer Preview)" 
-                                  FontWeight="Normal"
-                                  ToolTip="Use AI-powered semantic search for more relevant results"
-                                  Checked="vector_search_checked"
-                                  Unchecked="vector_search_unchecked"/>
-                    </StackPanel>
-                </GroupBox>
-                
-                <!-- Vector Search Section (Developer Only) -->
-                <GroupBox x:Name="vector_search_group" Header="Semantic Search (Developer Preview)" Visibility="Collapsed">
-                    <StackPanel>
-                        <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="{StaticResource TextSecondaryColor}">
-                            Semantic search uses AI embeddings to find conceptually similar content, providing more relevant results than keyword matching alone.
-                        </TextBlock>
-                        
-                        <TextBlock x:Name="sync_status_text" 
-                                   Text="Not synced yet" 
-                                   FontSize="11" 
-                                   Foreground="{StaticResource TextSecondaryColor}"
-                                   Margin="0,5,0,0"/>
-                        
-                        <Grid Margin="0,15,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0" Margin="0,0,10,0">
-                                <TextBlock Text="Documents Indexed:" FontWeight="SemiBold" FontSize="11"/>
-                                <TextBlock x:Name="indexed_docs_text" Text="0" FontSize="20" Foreground="{StaticResource PrimaryColor}"/>
-                            </StackPanel>
-                            <StackPanel Grid.Column="1">
-                                <TextBlock Text="Text Chunks:" FontWeight="SemiBold" FontSize="11"/>
-                                <TextBlock x:Name="indexed_chunks_text" Text="0" FontSize="20" Foreground="{StaticResource PrimaryColor}"/>
-                            </StackPanel>
-                        </Grid>
-                        
-                        <Button x:Name="reindex_vector_db_btn" 
-                                Content="Re-index Vector Database" 
-                                HorizontalAlignment="Left"
-                                Click="reindex_vector_db_click"
-                                Margin="0,15,0,0"
-                                Padding="15,8"
-                                Style="{StaticResource PrimaryButtonStyle}"
-                                ToolTip="Rebuild the vector database with optimized chunk settings. This will improve search quality and use new performance optimizations."/>
                     </StackPanel>
                 </GroupBox>
                 
@@ -237,112 +207,199 @@
                                 ToolTip="Reset your acceptance of terms so the disclaimer will appear again on next launch"/>
                     </StackPanel>
                 </GroupBox>
-                
-                <!-- Advanced Settings Expander -->
-                <Expander Header="Advanced Settings" 
-                         FontWeight="SemiBold" 
-                         Margin="0,5"
-                         Background="{StaticResource SurfaceColor}"
-                         Padding="10">
-                    <StackPanel Margin="0,10,0,0">
-                        
-                        <!-- Standards Source -->
-                        <GroupBox Header="Standards Source">
-                            <StackPanel>
-                                <TextBlock Text="Primary Source:" FontWeight="Normal"/>
-                                <ComboBox x:Name="standards_source_combo" Margin="0,0,0,10" SelectionChanged="source_changed" Height="30" Padding="5">
-                                    <ComboBoxItem Content="Notion" Tag="notion"/>
-                                    <ComboBoxItem Content="SharePoint" Tag="sharepoint"/>
-                                </ComboBox>
-                            </StackPanel>
-                        </GroupBox>
 
-                        <!-- SharePoint Configuration -->
-                        <GroupBox x:Name="sharepoint_group" Header="SharePoint Configuration">
-                             <StackPanel>
-                                <TextBlock Text="Site URL:" FontWeight="Normal"/>
-                                <TextBox x:Name="sharepoint_site_url" />
-                                <TextBlock Text="Tenant ID:" FontWeight="Normal" Margin="0,5,0,2"/>
-                                <TextBox x:Name="sharepoint_tenant_id" />
-                                <TextBlock Text="Client ID:" FontWeight="Normal" Margin="0,5,0,2"/>
-                                <TextBox x:Name="sharepoint_client_id" />
-                                <TextBlock Text="Client Secret:" FontWeight="Normal" Margin="0,5,0,2"/>
-                                <PasswordBox x:Name="sharepoint_client_secret"/>                                
-                                <Button x:Name="update_index_btn" 
-                                        Content="Update Search Index" 
-                                        HorizontalAlignment="Left"
-                                        Click="update_index_click"
-                                        Margin="0,15,0,0"
-                                        Padding="15,5"
-                                        ToolTip="Update the local index of SharePoint pages for better search results"/>                             </StackPanel>
-                        </GroupBox>
+                <!-- Admin Panel (hidden until unlocked) -->
+                <StackPanel x:Name="admin_panel" Visibility="Collapsed">
 
-                        <!-- Notion Configuration -->
-                        <GroupBox x:Name="notion_group" Header="Notion Configuration">
-                            <StackPanel>
-                                <TextBlock Text="Database ID:" FontWeight="Normal"/>
-                                <TextBox x:Name="notion_database_id" />
-                                <TextBlock Text="API Key:" FontWeight="Normal" Margin="0,5,0,2"/>
-                                <TextBox x:Name="notion_api_key" />
-                                <TextBlock Text="Max Search Results:" FontWeight="Normal" Margin="0,12,0,2"/>
-                                <TextBox x:Name="max_search_results" />
-                            </StackPanel>
-                        </GroupBox>
-                        
-                        <!-- Anthropic Configuration -->
-                        <GroupBox Header="Anthropic Configuration">
-                            <StackPanel>
-                                <TextBlock Text="API Key:" FontWeight="Normal"/>
-                                <TextBox x:Name="anthropic_api_key" />
-                                <TextBlock Text="Model Name:" FontWeight="Normal" Margin="0,12,0,2"/>
-                                <TextBox x:Name="model_name" />
-                                <TextBlock Text="Max Tokens:" FontWeight="Normal" Margin="0,12,0,2"/>
-                                <TextBox x:Name="max_tokens" />
-                                <TextBlock Text="Temperature (0.0 - 1.0):" FontWeight="Normal" Margin="0,12,0,2"/>
-                                <TextBox x:Name="temperature" />
-                            </StackPanel>
-                        </GroupBox>
-                        
-                        <!-- Logging Configuration -->
-                        <GroupBox Header="Logging Configuration">
-                            <StackPanel>
-                                <CheckBox x:Name="logging_enabled" Content="Enable Logging" FontWeight="Normal"/>
-                                <CheckBox x:Name="analytics_enabled" Content="Enable Analytics" FontWeight="Normal"/>
-                                
-                                <TextBlock Text="Central Log Path (Optional):" FontWeight="Normal" Margin="0,12,0,2"/>
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                    </Grid.ColumnDefinitions>
-                                    <TextBox x:Name="central_log_path" Grid.Column="0" Margin="0,0,5,0"/>
-                                    <Button Content="Browse..." 
-                                            Grid.Column="1" 
-                                            Click="browse_log_path"
-                                            Padding="10,0"/>
-                                </Grid>
-                            </StackPanel>
-                        </GroupBox>
-                        
-                    </StackPanel>
-                </Expander>
+                    <!-- Feature Settings -->
+                    <GroupBox Header="Feature Settings">
+                        <StackPanel>
+                            <CheckBox x:Name="enable_actions"
+                                      Content="Enable executable actions (select elements, change worksets, etc.)"
+                                      FontWeight="Normal"
+                                      ToolTip="Allow the assistant to suggest and perform actions directly in Revit"/>
+
+                            <CheckBox x:Name="enable_workflows"
+                                      Content="Enable multi-step workflows"
+                                      FontWeight="Normal"
+                                      ToolTip="Allow the assistant to suggest and execute complex multi-step workflows"/>
+
+                            <CheckBox x:Name="enable_vector_search"
+                                      Content="Enable semantic search"
+                                      FontWeight="Normal"
+                                      ToolTip="Use AI-powered semantic search for more relevant results"
+                                      Checked="vector_search_checked"
+                                      Unchecked="vector_search_unchecked"/>
+                        </StackPanel>
+                    </GroupBox>
+
+                    <!-- Semantic Search Section -->
+                    <GroupBox x:Name="vector_search_group" Header="Semantic Search" Visibility="Collapsed">
+                        <StackPanel>
+                            <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="{StaticResource TextSecondaryColor}">
+                                Semantic search uses AI embeddings to find conceptually similar content, providing more relevant results than keyword matching alone.
+                            </TextBlock>
+                            
+                            <TextBlock x:Name="sync_status_text" 
+                                       Text="Not synced yet" 
+                                       FontSize="11" 
+                                       Foreground="{StaticResource TextSecondaryColor}"
+                                       Margin="0,5,0,0"/>
+                            
+                            <Grid Margin="0,15,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Margin="0,0,10,0">
+                                    <TextBlock Text="Documents Indexed:" FontWeight="SemiBold" FontSize="11"/>
+                                    <TextBlock x:Name="indexed_docs_text" Text="0" FontSize="20" Foreground="{StaticResource PrimaryColor}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1">
+                                    <TextBlock Text="Text Chunks:" FontWeight="SemiBold" FontSize="11"/>
+                                    <TextBlock x:Name="indexed_chunks_text" Text="0" FontSize="20" Foreground="{StaticResource PrimaryColor}"/>
+                                </StackPanel>
+                            </Grid>
+                            
+                            <Button x:Name="reindex_vector_db_btn" 
+                                    Content="Re-index Vector Database" 
+                                    HorizontalAlignment="Left"
+                                    Click="reindex_vector_db_click"
+                                    Margin="0,15,0,0"
+                                    Padding="15,8"
+                                    Style="{StaticResource PrimaryButtonStyle}"
+                                    ToolTip="Rebuild the vector database with optimized chunk settings."/>
+                        </StackPanel>
+                    </GroupBox>
+
+                    <!-- Advanced Settings Expander -->
+                    <Expander Header="Advanced Settings" 
+                             FontWeight="SemiBold" 
+                             Margin="0,5"
+                             Background="{StaticResource SurfaceColor}"
+                             Padding="10">
+                        <StackPanel Margin="0,10,0,0">
+                            
+                            <!-- Standards Source -->
+                            <GroupBox Header="Standards Source">
+                                <StackPanel>
+                                    <TextBlock Text="Primary Source:" FontWeight="Normal"/>
+                                    <ComboBox x:Name="standards_source_combo" Margin="0,0,0,10" SelectionChanged="source_changed" Height="30" Padding="5">
+                                        <ComboBoxItem Content="Notion" Tag="notion"/>
+                                        <ComboBoxItem Content="SharePoint" Tag="sharepoint"/>
+                                    </ComboBox>
+                                </StackPanel>
+                            </GroupBox>
+
+                            <!-- SharePoint Configuration -->
+                            <GroupBox x:Name="sharepoint_group" Header="SharePoint Configuration">
+                                 <StackPanel>
+                                    <TextBlock Text="Site URL:" FontWeight="Normal"/>
+                                    <TextBox x:Name="sharepoint_site_url" />
+                                    <TextBlock Text="Tenant ID:" FontWeight="Normal" Margin="0,5,0,2"/>
+                                    <TextBox x:Name="sharepoint_tenant_id" />
+                                    <TextBlock Text="Client ID:" FontWeight="Normal" Margin="0,5,0,2"/>
+                                    <TextBox x:Name="sharepoint_client_id" />
+                                    <TextBlock Text="Client Secret:" FontWeight="Normal" Margin="0,5,0,2"/>
+                                    <PasswordBox x:Name="sharepoint_client_secret"/>                                
+                                    <Button x:Name="update_index_btn" 
+                                            Content="Update Search Index" 
+                                            HorizontalAlignment="Left"
+                                            Click="update_index_click"
+                                            Margin="0,15,0,0"
+                                            Padding="15,5"
+                                            ToolTip="Update the local index of SharePoint pages for better search results"/>
+                                 </StackPanel>
+                            </GroupBox>
+
+                            <!-- Notion Configuration -->
+                            <GroupBox x:Name="notion_group" Header="Notion Configuration">
+                                <StackPanel>
+                                    <TextBlock Text="Database ID:" FontWeight="Normal"/>
+                                    <TextBox x:Name="notion_database_id" />
+                                    <TextBlock Text="API Key:" FontWeight="Normal" Margin="0,5,0,2"/>
+                                    <TextBox x:Name="notion_api_key" />
+                                    <TextBlock Text="Max Search Results:" FontWeight="Normal" Margin="0,12,0,2"/>
+                                    <TextBox x:Name="max_search_results" />
+                                </StackPanel>
+                            </GroupBox>
+                            
+                            <!-- Anthropic Configuration -->
+                            <GroupBox Header="Anthropic Configuration">
+                                <StackPanel>
+                                    <TextBlock Text="API Key:" FontWeight="Normal"/>
+                                    <TextBox x:Name="anthropic_api_key" />
+                                    <TextBlock Text="Model Name:" FontWeight="Normal" Margin="0,12,0,2"/>
+                                    <TextBox x:Name="model_name" />
+                                    <TextBlock Text="Max Tokens:" FontWeight="Normal" Margin="0,12,0,2"/>
+                                    <TextBox x:Name="max_tokens" />
+                                    <TextBlock Text="Temperature (0.0 - 1.0):" FontWeight="Normal" Margin="0,12,0,2"/>
+                                    <TextBox x:Name="temperature" />
+                                </StackPanel>
+                            </GroupBox>
+                            
+                            <!-- Logging Configuration -->
+                            <GroupBox Header="Logging Configuration">
+                                <StackPanel>
+                                    <CheckBox x:Name="logging_enabled" Content="Enable Logging" FontWeight="Normal"/>
+                                    <CheckBox x:Name="analytics_enabled" Content="Enable Analytics" FontWeight="Normal"/>
+                                    
+                                    <TextBlock Text="Central Log Path (Optional):" FontWeight="Normal" Margin="0,12,0,2"/>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox x:Name="central_log_path" Grid.Column="0" Margin="0,0,5,0"/>
+                                        <Button Content="Browse..." 
+                                                Grid.Column="1" 
+                                                Click="browse_log_path"
+                                                Padding="10,0"/>
+                                    </Grid>
+                                </StackPanel>
+                            </GroupBox>
+                            
+                        </StackPanel>
+                    </Expander>
+
+                </StackPanel>
                 
             </StackPanel>
         </ScrollViewer>
         
         <!-- Buttons -->
-        <StackPanel Grid.Row="1" 
-                    Orientation="Horizontal" 
-                    HorizontalAlignment="Right" 
-                    Margin="0,15,0,0">
-            <Button Content="Save" 
-                    Click="save_click" 
-                    IsDefault="True"
-                    Style="{StaticResource PrimaryButtonStyle}"/>
-            <Button Content="Cancel" 
-                    Click="cancel_click"
-                    IsCancel="True"/>
-        </StackPanel>
+        <Grid Grid.Row="1" Margin="0,15,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Admin unlock (left side) -->
+            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                <Button x:Name="unlock_admin_btn"
+                        Content="Admin Settings"
+                        Click="unlock_admin_click"
+                        Style="{StaticResource SubtleButtonStyle}"/>
+                <TextBlock x:Name="admin_unlocked_label"
+                           Text="Admin (unlocked)"
+                           FontSize="11"
+                           Foreground="#107C10"
+                           VerticalAlignment="Center"
+                           Margin="4,0,0,0"
+                           Visibility="Collapsed"/>
+            </StackPanel>
+
+            <!-- Save / Cancel (right side) -->
+            <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Content="Save" 
+                        Click="save_click" 
+                        IsDefault="True"
+                        Style="{StaticResource PrimaryButtonStyle}"/>
+                <Button Content="Cancel" 
+                        Click="cancel_click"
+                        IsCancel="True"/>
+            </StackPanel>
+        </Grid>
         
     </Grid>
 </Window>

@@ -1674,10 +1674,23 @@ class StandardsChatWindow(forms.WPFWindow):
                     display_text = re.sub(u'\n{3,}', u'\n\n', display_text)
                     display_text = display_text.strip()
                 
-                # Clear and reformat with markdown (WITHOUT the JSON)
-                self.streaming_textblock.Inlines.Clear()
-                self._add_formatted_text(self.streaming_textblock, display_text, sources=sources)
-                
+                # Clear and reformat with markdown (WITHOUT the JSON).
+                # If the text contains a markdown table, swap the TextBlock for a
+                # StackPanel that can host both text blocks and Grid-based tables.
+                import re as _re
+                has_table = bool(_re.search(u'^\\|.+\\|', display_text, _re.MULTILINE))
+                if has_table:
+                    content_panel = StackPanel()
+                    content_panel.Orientation = Orientation.Vertical
+                    self._render_message_to_panel(content_panel, display_text,
+                                                  text_color=self.FindResource("TextPrimaryColor"),
+                                                  sources=sources)
+                    self.streaming_border.Child = content_panel
+                    self.streaming_textblock = None  # no longer a simple textblock
+                else:
+                    self.streaming_textblock.Inlines.Clear()
+                    self._add_formatted_text(self.streaming_textblock, display_text, sources=sources)
+
                 # Add action buttons if enabled in settings
                 actions_enabled = self.config.get('features', 'enable_actions', default=True)
                 workflows_enabled = self.config.get('features', 'enable_workflows', default=True)
@@ -1865,18 +1878,30 @@ class StandardsChatWindow(forms.WPFWindow):
              pass
              
         if not is_user:
-            self._add_formatted_text(textblock, text)
+            # If the text contains a markdown table, use a StackPanel so we can
+            # mix TextBlock and Grid-based table elements inside the bubble.
+            import re as _re
+            has_table = bool(_re.search(u'^\\|.+\\|', text, _re.MULTILINE))
+            if has_table:
+                content_panel = StackPanel()
+                content_panel.Orientation = Orientation.Vertical
+                self._render_message_to_panel(content_panel, text,
+                                              text_color=text_color,
+                                              sources=sources)
+                border.Child = content_panel
+            else:
+                self._add_formatted_text(textblock, text)
+                border.Child = textblock
         else:
             # User messages are plain text
             textblock.Inlines.Add(Run(text))
+            border.Child = textblock
 
         # Add subdued source links (Legacy path, now mostly handled by finish_streaming_response)
         if sources and not is_user:
              # This legacy method added them inside the bubble.
              # We prefer the separate panel created in finish_streaming_response
-             pass 
-
-        border.Child = textblock
+             pass
 
         # Wrap with avatar and add to panel
         container = self._wrap_with_avatar(border, is_user)
@@ -2059,6 +2084,184 @@ class StandardsChatWindow(forms.WPFWindow):
             except:
                 textblock.Inlines.Add(Run(u"<Error displaying text>"))
     
+    # ------------------------------------------------------------------
+    # Markdown table rendering
+    # ------------------------------------------------------------------
+
+    def _split_text_and_tables(self, text):
+        """Split markdown text into ('text', str) and ('table', rows) segments.
+
+        A table block is any run of consecutive lines where every non-blank
+        line either starts with '|' or is an all-dash separator row.
+        """
+        import re
+        lines = text.split(u'\n')
+        segments = []
+        text_buf = []
+        table_buf = []
+        in_table = False
+
+        def _is_table_line(l):
+            s = l.strip()
+            if not s:
+                return False
+            if re.match(u'^[\\s|:\\-]+$', s) and u'|' in s and u'-' in s:
+                return True
+            return s.startswith(u'|') and s.count(u'|') > 1
+
+        def _flush_table():
+            rows = self._parse_table_markdown(table_buf)
+            if rows:
+                segments.append((u'table', rows))
+            else:
+                text_buf.extend(table_buf)
+            del table_buf[:]
+
+        for line in lines:
+            if _is_table_line(line):
+                if not in_table:
+                    if text_buf:
+                        segments.append((u'text', u'\n'.join(text_buf)))
+                        del text_buf[:]
+                    in_table = True
+                table_buf.append(line)
+            else:
+                if in_table:
+                    _flush_table()
+                    in_table = False
+                text_buf.append(line)
+
+        if in_table:
+            _flush_table()
+        if text_buf:
+            segments.append((u'text', u'\n'.join(text_buf)))
+
+        return segments
+
+    def _parse_table_markdown(self, lines):
+        """Parse markdown table lines into a list of row cell-lists.
+
+        First row is the header; separator rows are discarded.
+        Returns None if the block is not a recognisable table.
+        """
+        import re
+        rows = []
+        for line in lines:
+            s = line.strip()
+            if not s:
+                continue
+            if re.match(u'^[\\s|:\\-]+$', s) and u'-' in s:
+                continue
+            cells = [c.strip() for c in s.split(u'|')]
+            if cells and cells[0] == u'':
+                cells = cells[1:]
+            if cells and cells[-1] == u'':
+                cells = cells[:-1]
+            if cells:
+                rows.append(cells)
+        return rows if rows else None
+
+    def _create_table_element(self, rows):
+        """Build a WPF Border>Grid table from a list of row cell-lists.
+
+        The first row is rendered as a bold header with a grey background.
+        Alternating body rows receive a subtle tint for readability.
+        """
+        if not rows:
+            return None
+
+        from System.Windows.Controls import Grid, ColumnDefinition, RowDefinition
+        from System.Windows.Media import SolidColorBrush, Color
+        from System.Windows import GridLength, GridUnitType, CornerRadius
+        from standards_chat.utils import ascii_safe
+
+        n_cols = max(len(r) for r in rows)
+        if n_cols == 0:
+            return None
+
+        grid = Grid()
+
+        for _ in range(n_cols):
+            col_def = ColumnDefinition()
+            col_def.Width = GridLength(1, GridUnitType.Star)
+            grid.ColumnDefinitions.Add(col_def)
+
+        for _ in range(len(rows)):
+            row_def = RowDefinition()
+            row_def.Height = GridLength.Auto
+            grid.RowDefinitions.Add(row_def)
+
+        header_bg    = SolidColorBrush(Color.FromRgb(235, 235, 235))
+        alt_bg       = SolidColorBrush(Color.FromArgb(18, 0, 0, 0))
+        border_brush = SolidColorBrush(Color.FromRgb(210, 210, 210))
+
+        for r, row_cells in enumerate(rows):
+            is_header = (r == 0)
+            for c in range(n_cols):
+                cell_text = row_cells[c] if c < len(row_cells) else u''
+
+                cell_border = Border()
+                cell_border.Padding = Thickness(7, 5, 7, 5)
+                cell_border.BorderBrush = border_brush
+                right_t  = 1 if c < n_cols - 1 else 0
+                bottom_t = 1 if r < len(rows) - 1 else 0
+                cell_border.BorderThickness = Thickness(0, 0, right_t, bottom_t)
+
+                if is_header:
+                    cell_border.Background = header_bg
+                elif r % 2 == 1:
+                    cell_border.Background = alt_bg
+
+                cell_tb = TextBlock()
+                cell_tb.TextWrapping = TextWrapping.Wrap
+                cell_tb.Foreground = self.FindResource("TextPrimaryColor")
+                cell_tb.FontSize = 12
+                if is_header:
+                    cell_tb.FontWeight = System.Windows.FontWeights.SemiBold
+                cell_tb.Text = ascii_safe(cell_text)
+
+                cell_border.Child = cell_tb
+                Grid.SetRow(cell_border, r)
+                Grid.SetColumn(cell_border, c)
+                grid.Children.Add(cell_border)
+
+        outer = Border()
+        outer.BorderThickness = Thickness(1)
+        outer.BorderBrush = border_brush
+        outer.CornerRadius = CornerRadius(4)
+        outer.Margin = Thickness(0, 4, 0, 8)
+        outer.Child = grid
+        return outer
+
+    def _render_message_to_panel(self, panel, text, text_color=None, sources=None):
+        """Render a complete assistant message into a StackPanel.
+
+        Splits the text at markdown table boundaries.  Text segments are
+        rendered via _add_formatted_text; table segments become WPF Grid tables.
+        """
+        if text_color is None:
+            text_color = self.FindResource("TextPrimaryColor")
+
+        segments = self._split_text_and_tables(text)
+        remaining_sources = sources
+        for seg_type, seg_content in segments:
+            if seg_type == u'text':
+                stripped = seg_content.strip()
+                if not stripped:
+                    continue
+                tb = TextBlock()
+                tb.TextWrapping = TextWrapping.Wrap
+                tb.Foreground = text_color
+                self._add_formatted_text(tb, seg_content, sources=remaining_sources)
+                panel.Children.Add(tb)
+                remaining_sources = None  # only pass sources once for citation tooltips
+            elif seg_type == u'table':
+                table_el = self._create_table_element(seg_content)
+                if table_el:
+                    panel.Children.Add(table_el)
+
+    # ------------------------------------------------------------------
+
     def on_hyperlink_click(self, sender, args):
         """Open hyperlink in browser"""
         import webbrowser

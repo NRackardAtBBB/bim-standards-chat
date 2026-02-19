@@ -130,9 +130,15 @@ class VectorDBClient:
         developer_mode = self.config.get_config('vector_search.developer_mode', True)
         if not developer_mode:
             return True  # If not in developer mode, available to all
-        
+
         # Check if current user is in whitelist
         whitelist = self.config.get_config('vector_search.developer_whitelist', [])
+
+        # Safety: an empty whitelist would lock everyone out -- treat it as allow-all.
+        # This prevents a config save bug from silently breaking vector search.
+        if not whitelist:
+            return True
+
         current_user = os.environ.get('USERNAME', '').lower()
         return current_user in [u.lower() for u in whitelist]
     

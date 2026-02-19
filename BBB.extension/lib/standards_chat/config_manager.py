@@ -188,6 +188,10 @@ class ConfigManager:
                 except:
                     pass
 
+    def get_admin_password(self):
+        """Get the admin password from config"""
+        return self.config.get('admin', {}).get('password', '')
+
     def get_api_key(self, service):
         """Get API key for a service"""
         key_name = "{}_api_key".format(service)

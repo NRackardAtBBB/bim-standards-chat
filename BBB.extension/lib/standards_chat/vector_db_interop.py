@@ -8,6 +8,7 @@ import os
 import json
 import subprocess
 import base64
+import tempfile
 from standards_chat.utils import safe_print, safe_str
 
 def debug_log(message):
@@ -54,38 +55,68 @@ class VectorDBInteropClient:
         try:
             debug_log("VectorDBInteropClient: hybrid_search for query: {}".format(safe_str(query)[:100]))
             
-            # Base64 encode query to avoid CLI encoding issues with special chars
+            # Base64 encode query to avoid CLI encoding issues with special chars.
+            # Always decode to a plain ASCII str so it is safe in a subprocess cmd list
+            # regardless of whether we are running in IronPython 2.7 or CPython 3.x.
             query_bytes = query.encode('utf-8')
-            query_b64 = base64.b64encode(query_bytes)
+            raw_b64 = base64.b64encode(query_bytes)
+            # raw_b64 may be bytes (CPython 3) or str (IronPython 2.7)
+            if isinstance(raw_b64, bytes):
+                query_b64 = raw_b64.decode('ascii')
+            else:
+                query_b64 = str(raw_b64)
             
-            # Prepare command
-            cmd = [self.python_exe, self.script_path, "--base64", query_b64]
-            debug_log("VectorDBInteropClient: executing command: {}".format(' '.join(cmd)))
+            # Prepare command — use a temp file for output to avoid IronPython stdout-pipe issues
+            tmp_fd, tmp_path = tempfile.mkstemp(suffix='.json', prefix='kodama_search_')
+            os.close(tmp_fd)  # close the fd; the script will open it by path
             
-            # Use subprocess to run the command
-            # IronPython subprocess is slightly different than CPython, generally uses Popen
+            cmd = [self.python_exe, self.script_path, "--base64", query_b64, "--output", tmp_path]
+            debug_log("VectorDBInteropClient: executing command: {} <query_b64_len={}>".format(
+                ' '.join([self.python_exe, self.script_path, '--base64', '...', '--output', tmp_path]), len(query_b64)))
+            
+            # Use subprocess to run the command.
+            # CREATE_NO_WINDOW (0x08000000) prevents a visible CMD console popping up on Windows.
+            CREATE_NO_WINDOW = 0x08000000
             process = subprocess.Popen(
                 cmd, 
                 stdout=subprocess.PIPE, 
                 stderr=subprocess.PIPE,
-                shell=True # Often needed in Windows/IronPython context for path resolution
+                shell=False,
+                creationflags=CREATE_NO_WINDOW
             )
             
             stdout, stderr = process.communicate()
             debug_log("VectorDBInteropClient: process returned code {}".format(process.returncode))
             
-            if process.returncode != 0:
-                safe_print("Vector Search CLI Error: {}".format(safe_str(stderr)))
-                debug_log("VectorDBInteropClient: CLI error: {}".format(safe_str(stderr)[:500]))
+            # Read result from temp file (more reliable than stdout pipe in IronPython)
+            json_str = None
+            try:
+                if os.path.exists(tmp_path):
+                    with open(tmp_path, 'r') as f:
+                        json_str = f.read().strip()
+                    os.remove(tmp_path)
+            except Exception as read_err:
+                debug_log("VectorDBInteropClient: failed to read temp output file: {}".format(safe_str(read_err)))
+            
+            if process.returncode != 0 or not json_str:
+                # Decode stdout/stderr for diagnostics
+                if isinstance(stdout, bytes):
+                    stdout_str = stdout.decode('utf-8', errors='replace')
+                else:
+                    stdout_str = safe_str(stdout)
+                if isinstance(stderr, bytes):
+                    stderr_str = stderr.decode('utf-8', errors='replace')
+                else:
+                    stderr_str = safe_str(stderr)
+                safe_print("Vector Search CLI Error (stdout): {}".format(stdout_str))
+                safe_print("Vector Search CLI Error (stderr): {}".format(stderr_str))
+                debug_log("VectorDBInteropClient: CLI stdout: {}".format(stdout_str[:1000]))
+                debug_log("VectorDBInteropClient: CLI stderr: {}".format(stderr_str[:500]))
+                debug_log("VectorDBInteropClient: temp file content: {}".format((json_str or '')[:500]))
                 return []
                 
-            # Parse output
+            # Parse output from temp file
             try:
-                # The output might contain some noise if site-packages print things
-                # Look for the last line that looks like JSON
-                lines = stdout.strip().split('\n')
-                json_str = lines[-1]
-                
                 data = json.loads(json_str)
                 if data.get('success'):
                     results = data.get('results', [])
@@ -93,12 +124,16 @@ class VectorDBInteropClient:
                     return results
                 else:
                     error = data.get('error', 'Unknown error')
+                    tb = data.get('traceback', '')
                     safe_print("Vector Search API Error: {}".format(safe_str(error)))
+                    debug_log("VectorDBInteropClient: script error: {}".format(safe_str(error)[:500]))
+                    if tb:
+                        debug_log("VectorDBInteropClient: traceback: {}".format(safe_str(tb)[:1000]))
                     return []
                     
             except Exception as e:
                 safe_print("Error parsing vector search output: {}".format(safe_str(e)))
-                safe_print("Raw output: {}".format(safe_str(stdout)))
+                safe_print("Raw output: {}".format(safe_str(json_str)))
                 return []
                 
         except Exception as e:

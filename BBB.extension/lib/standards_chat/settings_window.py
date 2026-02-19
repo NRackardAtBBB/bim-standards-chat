@@ -25,6 +25,9 @@ class SettingsWindow(forms.WPFWindow):
         self.config_manager = ConfigManager()
         self.config = self.config_manager.config
         self.api_keys = self.config_manager.api_keys
+
+        # Admin unlock state
+        self._admin_unlocked = False
         
         # Create XAML path in ui folder
         # This file is in lib/standards_chat/, so up one level to lib, then to ui
@@ -42,6 +45,10 @@ class SettingsWindow(forms.WPFWindow):
         
         # Populate fields with current values
         self.populate_fields()
+
+        # Auto-unlock admin panel for whitelisted users (no password needed)
+        if self._is_admin_user():
+            self._unlock_admin()
         
     def populate_avatars(self):
         """Populate avatar combo box"""
@@ -184,28 +191,104 @@ class SettingsWindow(forms.WPFWindow):
             self.sharepoint_group.Visibility = System.Windows.Visibility.Collapsed
             self.notion_group.Visibility = System.Windows.Visibility.Visible
     
-    def _is_developer_user(self):
-        """Check if current user is in developer whitelist"""
+    def _is_admin_user(self):
+        """Check if current Windows user is in the admin/developer whitelist"""
         whitelist = self.config.get('vector_search', {}).get('developer_whitelist', [])
         current_user = os.environ.get('USERNAME', '').lower()
         return current_user in [u.lower() for u in whitelist]
-    
-    def _update_vector_search_visibility(self):
-        """Show/hide vector search section based on developer mode and user"""
-        developer_mode = self.config.get('vector_search', {}).get('developer_mode', True)
-        
-        # Show section if developer mode is OFF, or if user is in whitelist
-        if not developer_mode or self._is_developer_user():
-            # Show the main checkbox
-            self.enable_vector_search.Visibility = System.Windows.Visibility.Visible
-            # Show the detailed section if checkbox is checked
-            if self.enable_vector_search.IsChecked:
-                self.vector_search_group.Visibility = System.Windows.Visibility.Visible
-            else:
-                self.vector_search_group.Visibility = System.Windows.Visibility.Collapsed
+
+    def _unlock_admin(self):
+        """Reveal admin panel and update button UI"""
+        self._admin_unlocked = True
+        self.admin_panel.Visibility = System.Windows.Visibility.Visible
+        self.unlock_admin_btn.Visibility = System.Windows.Visibility.Collapsed
+        self.admin_unlocked_label.Visibility = System.Windows.Visibility.Visible
+
+    def unlock_admin_click(self, sender, args):
+        """Handle Admin Settings button click"""
+        # Whitelisted users bypass the password
+        if self._is_admin_user():
+            self._unlock_admin()
+            return
+
+        entered = self._prompt_admin_password()
+        if entered is None:
+            return  # User cancelled
+
+        admin_password = self.config.get('admin', {}).get('password', '')
+        if entered == admin_password:
+            self._unlock_admin()
         else:
-            # Hide everything if developer mode is on and user not in whitelist
-            self.enable_vector_search.Visibility = System.Windows.Visibility.Collapsed
+            forms.alert("Incorrect password.", title="Admin Access", warn_icon=True)
+
+    def _prompt_admin_password(self):
+        """Show a modal password dialog. Returns the entered string, or None if cancelled."""
+        import System.Windows as SW
+        import System.Windows.Controls as SWC
+
+        result = [None]
+
+        dialog = SW.Window()
+        dialog.Title = "Admin Access"
+        dialog.Width = 300
+        dialog.Height = 180
+        dialog.WindowStartupLocation = SW.WindowStartupLocation.CenterOwner
+        dialog.ResizeMode = SW.ResizeMode.NoResize
+        try:
+            dialog.Owner = self
+        except Exception:
+            pass
+
+        outer = SWC.StackPanel()
+        outer.Margin = SW.Thickness(20)
+
+        lbl = SWC.TextBlock()
+        lbl.Text = "Enter admin password:"
+        lbl.Margin = SW.Thickness(0, 0, 0, 8)
+
+        pw_box = SWC.PasswordBox()
+        pw_box.Margin = SW.Thickness(0, 0, 0, 12)
+
+        btn_panel = SWC.StackPanel()
+        btn_panel.Orientation = SWC.Orientation.Horizontal
+        btn_panel.HorizontalAlignment = SW.HorizontalAlignment.Right
+
+        ok_btn = SWC.Button()
+        ok_btn.Content = "OK"
+        ok_btn.Width = 70
+        ok_btn.Margin = SW.Thickness(0, 0, 5, 0)
+        ok_btn.IsDefault = True
+
+        cancel_btn = SWC.Button()
+        cancel_btn.Content = "Cancel"
+        cancel_btn.Width = 70
+        cancel_btn.IsCancel = True
+
+        def ok_click(s, e):
+            result[0] = pw_box.Password
+            dialog.DialogResult = True
+
+        def cancel_click(s, e):
+            dialog.DialogResult = False
+
+        ok_btn.Click += ok_click
+        cancel_btn.Click += cancel_click
+
+        btn_panel.Children.Add(ok_btn)
+        btn_panel.Children.Add(cancel_btn)
+        outer.Children.Add(lbl)
+        outer.Children.Add(pw_box)
+        outer.Children.Add(btn_panel)
+        dialog.Content = outer
+        dialog.ShowDialog()
+
+        return result[0]
+
+    def _update_vector_search_visibility(self):
+        """Show/hide vector search details section based on the enable checkbox"""
+        if self.enable_vector_search.IsChecked:
+            self.vector_search_group.Visibility = System.Windows.Visibility.Visible
+        else:
             self.vector_search_group.Visibility = System.Windows.Visibility.Collapsed
     
     def _update_vector_search_stats(self):
@@ -460,60 +543,65 @@ class SettingsWindow(forms.WPFWindow):
             else:
                 self.config['user']['avatar'] = None
             
+            # User-facing feature toggles (always saved)
             if 'features' not in self.config:
                 self.config['features'] = {}
             self.config['features']['include_screenshot'] = bool(self.auto_include_screenshot.IsChecked)
             self.config['features']['include_context'] = bool(self.auto_include_context.IsChecked)
-            self.config['features']['enable_actions'] = bool(self.enable_actions.IsChecked)
-            self.config['features']['enable_workflows'] = bool(self.enable_workflows.IsChecked)
-            self.config['features']['enable_vector_search'] = bool(self.enable_vector_search.IsChecked)
-            
-            # Update Standards Source
-            if self.standards_source_combo.SelectedIndex == 1:
-                self.config['features']['standards_source'] = 'sharepoint'
-            else:
-                self.config['features']['standards_source'] = 'notion'
-                
-            # Update SharePoint config
-            if 'sharepoint' not in self.config:
-                self.config['sharepoint'] = {}
-            self.config['sharepoint']['site_url'] = self.sharepoint_site_url.Text
-            self.config['sharepoint']['tenant_id'] = self.sharepoint_tenant_id.Text
-            self.config['sharepoint']['client_id'] = self.sharepoint_client_id.Text
-            
-            # Update API keys
-            self.api_keys['sharepoint_client_secret'] = self.sharepoint_client_secret.Password
-            self.api_keys['notion_api_key'] = self.notion_api_key.Text
-            self.api_keys['anthropic_api_key'] = self.anthropic_api_key.Text
-            
-            # Update Notion config
-            if 'notion' not in self.config:
-                self.config['notion'] = {}
-            self.config['notion']['database_id'] = self.notion_database_id.Text
-            try:
-                self.config['notion']['max_search_results'] = int(self.max_search_results.Text)
-            except:
-                pass
-                
-            # Update Anthropic config
-            if 'anthropic' not in self.config:
-                self.config['anthropic'] = {}
-            self.config['anthropic']['model'] = self.model_name.Text
-            try:
-                self.config['anthropic']['max_tokens'] = int(self.max_tokens.Text)
-                self.config['anthropic']['temperature'] = float(self.temperature.Text)
-            except:
-                pass
-            
-            # Update Logging
-            if 'logging' not in self.config:
-                self.config['logging'] = {}
-            self.config['logging']['enabled'] = bool(self.logging_enabled.IsChecked)
-            self.config['logging']['analytics_enabled'] = bool(self.analytics_enabled.IsChecked)
-            self.config['logging']['central_log_path'] = self.central_log_path.Text.strip()
 
-            # Save using ConfigManager
-            self.config_manager.save_api_keys()
+            # Admin-only settings: only written when admin panel is unlocked
+            if self._admin_unlocked:
+                self.config['features']['enable_actions'] = bool(self.enable_actions.IsChecked)
+                self.config['features']['enable_workflows'] = bool(self.enable_workflows.IsChecked)
+                self.config['features']['enable_vector_search'] = bool(self.enable_vector_search.IsChecked)
+
+                # Update Standards Source
+                if self.standards_source_combo.SelectedIndex == 1:
+                    self.config['features']['standards_source'] = 'sharepoint'
+                else:
+                    self.config['features']['standards_source'] = 'notion'
+
+                # Update SharePoint config
+                if 'sharepoint' not in self.config:
+                    self.config['sharepoint'] = {}
+                self.config['sharepoint']['site_url'] = self.sharepoint_site_url.Text
+                self.config['sharepoint']['tenant_id'] = self.sharepoint_tenant_id.Text
+                self.config['sharepoint']['client_id'] = self.sharepoint_client_id.Text
+
+                # Update API keys
+                self.api_keys['sharepoint_client_secret'] = self.sharepoint_client_secret.Password
+                self.api_keys['notion_api_key'] = self.notion_api_key.Text
+                self.api_keys['anthropic_api_key'] = self.anthropic_api_key.Text
+
+                # Update Notion config
+                if 'notion' not in self.config:
+                    self.config['notion'] = {}
+                self.config['notion']['database_id'] = self.notion_database_id.Text
+                try:
+                    self.config['notion']['max_search_results'] = int(self.max_search_results.Text)
+                except:
+                    pass
+
+                # Update Anthropic config
+                if 'anthropic' not in self.config:
+                    self.config['anthropic'] = {}
+                self.config['anthropic']['model'] = self.model_name.Text
+                try:
+                    self.config['anthropic']['max_tokens'] = int(self.max_tokens.Text)
+                    self.config['anthropic']['temperature'] = float(self.temperature.Text)
+                except:
+                    pass
+
+                # Update Logging
+                if 'logging' not in self.config:
+                    self.config['logging'] = {}
+                self.config['logging']['enabled'] = bool(self.logging_enabled.IsChecked)
+                self.config['logging']['analytics_enabled'] = bool(self.analytics_enabled.IsChecked)
+                self.config['logging']['central_log_path'] = self.central_log_path.Text.strip()
+
+                self.config_manager.save_api_keys()
+
+            # Save using ConfigManager (always saves user prefs; api_keys only if admin unlocked)
             self.config_manager.save()
             
             self.Close()

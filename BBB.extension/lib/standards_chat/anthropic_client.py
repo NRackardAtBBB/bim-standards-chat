@@ -386,6 +386,17 @@ Return ONLY the keywords separated by spaces. Do not include any other text.""".
                     u"Source: {}\n".format(ascii_safe(page['url']))
                 )
                 context_parts.append(u"\n{}\n\n".format(ascii_safe(page['content'])))
+        else:
+            # Explicitly flag that no documents were retrieved so the model cannot
+            # fabricate BBB-specific guidance from its own knowledge.
+            context_parts.append(
+                u"# Relevant BBB Documents\n\n"
+                u"No relevant BBB standards documents were found for this query.\n"
+                u"If the question is about BBB-specific standards, practices, or settings, "
+                u"do not invent an answer -- tell the user you don't have that information "
+                u"in the standards and suggest checking with their BIM Manager or consulting "
+                u"the relevant standards page directly.\n\n"
+            )
 
         # Add Revit context if available
         if revit_context:
