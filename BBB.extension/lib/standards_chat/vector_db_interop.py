@@ -39,14 +39,57 @@ class VectorDBInteropClient:
         current_dir = os.path.dirname(os.path.abspath(__file__))
         self.script_path = os.path.join(current_dir, 'search_vector_db.py')
         
-        # Determine python executable
-        # Try to find a python 3 executable
-        self.python_exe = "python" # Default to PATH
-        
-        # Check if we configured a specific python path
-        configured_python = self.config.get_config('vector_search.python_path', None)
-        if configured_python and os.path.exists(configured_python):
-            self.python_exe = configured_python
+        self.python_exe = self._find_python(current_dir)
+        debug_log("VectorDBInteropClient: using python: {}".format(self.python_exe))
+
+    def _find_python(self, start_dir):
+        """
+        Find the best available CPython 3 executable. Resolution order:
+          1. config vector_search.python_path  (explicit override)
+          2. .venv relative to extension root  (dev/production venv)
+          3. Windows 'py -3' launcher           (standard Python install on Windows)
+          4. 'python3' / 'python'               (PATH fallback)
+        """
+        # 1. Explicit config override
+        configured = self.config.get_config('vector_search.python_path', None)
+        if configured and os.path.isfile(configured):
+            debug_log("_find_python: using config path: {}".format(configured))
+            return configured
+
+        # 2. Walk up from the script dir looking for a .venv
+        #    Covers: repo-root venv (dev) and extension-level venv (production)
+        search_dir = start_dir
+        for _ in range(6):  # max 6 levels up
+            candidate = os.path.join(search_dir, '.venv', 'Scripts', 'python.exe')
+            if os.path.isfile(candidate):
+                debug_log("_find_python: found venv at: {}".format(candidate))
+                return candidate
+            parent = os.path.dirname(search_dir)
+            if parent == search_dir:
+                break
+            search_dir = parent
+
+        # 3. Windows 'py' launcher (present on any standard Windows Python install)
+        try:
+            result = subprocess.Popen(
+                ['py', '-3', '-c', 'import sys; print(sys.executable)'],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                shell=False, creationflags=0x08000000
+            )
+            out, _ = result.communicate()
+            if result.returncode == 0:
+                exe = out.strip()
+                if isinstance(exe, bytes):
+                    exe = exe.decode('utf-8', errors='replace').strip()
+                if exe and os.path.isfile(exe):
+                    debug_log("_find_python: found via py launcher: {}".format(exe))
+                    return exe
+        except Exception:
+            pass
+
+        # 4. PATH fallback
+        debug_log("_find_python: falling back to 'python' in PATH")
+        return 'python'
 
     def hybrid_search(self, query, n_results=10, deduplicate=True):
         """

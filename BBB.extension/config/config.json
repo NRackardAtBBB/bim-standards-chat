@@ -82,7 +82,7 @@
     "password": "kodama-admin"
   }, 
   "vector_search": {
-    "python_path": "C:\\Users\\nrackard\\Code\\bim-standards-chat\\.venv\\Scripts\\python.exe",
+    "python_path": null,
     "indexed_document_count": 288, 
     "indexed_pdf_count": 39, 
     "db_path": "vector_db", 
