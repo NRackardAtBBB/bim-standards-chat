@@ -8,15 +8,11 @@ from pyrevit import forms
 import sys
 import os
 
-# Add lib path
-script_dir = os.path.dirname(__file__)
-extension_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(script_dir))))
-lib_path = os.path.join(extension_dir, 'lib')
-if lib_path not in sys.path:
-    sys.path.append(lib_path)
-
-# Import the shared SettingsWindow class
-from standards_chat.settings_window import SettingsWindow
+# Add lib path (3 levels up: Settings.pushbutton -> Kodama.panel -> Chat.tab -> BBB.extension)
+_script_dir = os.path.dirname(__file__)
+_lib_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(_script_dir))), 'lib')
+if _lib_path not in sys.path:
+    sys.path.insert(0, _lib_path)
 
 __title__ = "Settings"
 __author__ = "BBB DCT Team"
@@ -24,6 +20,17 @@ __doc__ = "Configure API keys and settings for Standards Assistant"
 
 def main():
     """Open settings dialog"""
+    # Defer import to prevent pyRevit C# session creation errors at startup
+    try:
+        from standards_chat.settings_window import SettingsWindow
+    except Exception as e:
+        forms.alert(
+            "Failed to load Settings modules:\n{}".format(str(e)),
+            title="Import Error",
+            warn_icon=True
+        )
+        return
+
     try:
         # Get config directory
         # Navigate from Settings.pushbutton/script.py up to BBB.extension/config

@@ -9,16 +9,12 @@ import sys
 import os
 
 # Add lib path to system path
-lib_path = os.path.join(
+_lib_path = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
     'lib'
 )
-if lib_path not in sys.path:
-    sys.path.insert(0, lib_path)
-
-from standards_chat.chat_window import StandardsChatWindow
-from standards_chat.disclaimer_window import DisclaimerWindow
-from standards_chat.config_manager import ConfigManager
+if _lib_path not in sys.path:
+    sys.path.insert(0, _lib_path)
 
 __title__ = "Standards\nChat"
 __author__ = "BBB DCT Team"
@@ -27,6 +23,19 @@ __doc__ = "AI-powered assistant for BBB Revit standards"
 
 def main():
     """Launch the standards chat window"""
+    # Defer heavy imports to here so pyRevit session creation doesn't fail
+    try:
+        from standards_chat.chat_window import StandardsChatWindow
+        from standards_chat.disclaimer_window import DisclaimerWindow
+        from standards_chat.config_manager import ConfigManager
+    except Exception as e:
+        forms.alert(
+            "Failed to load Standards Chat modules:\n{}".format(str(e)),
+            title="Import Error",
+            warn_icon=True
+        )
+        return
+
     try:
         # Initialize config manager
         config_manager = ConfigManager()
