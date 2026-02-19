@@ -35,6 +35,7 @@ lib_path = os.path.join(os.path.dirname(script_dir), 'lib')
 if lib_path not in sys.path:
     sys.path.append(lib_path)
 
+from pyrevit import forms
 from standards_chat.notion_client import NotionClient
 from standards_chat.anthropic_client import AnthropicClient
 from standards_chat.config_manager import ConfigManager
@@ -59,52 +60,38 @@ def debug_log(message):
         pass
 
 
-class StandardsChatWindow(Window):
+class StandardsChatWindow(forms.WPFWindow):
     """Main chat window for Kodama"""
     
     def __init__(self):
         """Initialize the chat window"""
-        # Load XAML
+        # Load XAML via pyrevit forms (registers window with pyRevit's manager,
+        # ensuring it is closed safely on the UI thread during reload)
         xaml_path = os.path.join(
             os.path.dirname(os.path.dirname(__file__)),
             'ui', 'chat_window.xaml'
         )
-        with open(xaml_path, 'r') as f:
-            xaml_content = f.read()
+        forms.WPFWindow.__init__(self, xaml_path)
         
-        # Parse XAML - this creates a complete window
-        window = XamlReader.Parse(xaml_content)
-        
-        # Copy all properties from parsed window to self
-        self.Title = window.Title
-        self.Height = window.Height
-        self.Width = window.Width
-        self.MinHeight = window.MinHeight
-        self.MinWidth = window.MinWidth
-        self.WindowStartupLocation = window.WindowStartupLocation
-        self.Background = window.Background
-        self.Content = window.Content
-        self.Resources = window.Resources
-        
-        # Get UI elements from the parsed window's content tree
-        self.messages_panel = window.FindName('MessagesPanel')
-        self.input_textbox = window.FindName('InputTextBox')
-        self.send_button = window.FindName('SendButton')
-        self.status_text = window.FindName('StatusText')
-        self.loading_overlay = window.FindName('LoadingOverlay')
-        self.loading_status_text = window.FindName('LoadingStatusText')
-        self.message_scrollviewer = window.FindName('MessageScrollViewer')
-        self.spinner_rotation = window.FindName('SpinnerRotation')
-        self.header_icon = window.FindName('HeaderIcon')
-        self.header_icon_button = window.FindName('HeaderIconButton')
-        self.ScreenshotToggle = window.FindName('ScreenshotToggle')
+        # Get UI elements from the XAML content tree
+        self.messages_panel = self.FindName('MessagesPanel')
+        self.input_textbox = self.FindName('InputTextBox')
+        self.send_button = self.FindName('SendButton')
+        self.status_text = self.FindName('StatusText')
+        self.loading_overlay = self.FindName('LoadingOverlay')
+        self.loading_status_text = self.FindName('LoadingStatusText')
+        self.message_scrollviewer = self.FindName('MessageScrollViewer')
+        self.spinner_rotation = self.FindName('SpinnerRotation')
+        self.header_icon = self.FindName('HeaderIcon')
+        self.header_icon_button = self.FindName('HeaderIconButton')
+        self.ScreenshotToggle = self.FindName('ScreenshotToggle')
         
         # Sidebar elements
-        self.sidebar = window.FindName('Sidebar')
-        self.sidebar_column = window.FindName('SidebarColumn')
-        self.toggle_sidebar_button = window.FindName('ToggleSidebarButton')
-        self.new_chat_button = window.FindName('NewChatButton')
-        self.history_listbox = window.FindName('HistoryListBox')
+        self.sidebar = self.FindName('Sidebar')
+        self.sidebar_column = self.FindName('SidebarColumn')
+        self.toggle_sidebar_button = self.FindName('ToggleSidebarButton')
+        self.new_chat_button = self.FindName('NewChatButton')
+        self.history_listbox = self.FindName('HistoryListBox')
         
         # Load icon image
         self._load_header_icon()
@@ -270,6 +257,12 @@ class StandardsChatWindow(Window):
         # Track active action button
         self.active_action_button = None
         
+        # Cancellation flag and reference for background query thread.
+        # Set _cancel_requested = True in on_closed so the thread exits cleanly
+        # before shared references are nulled.
+        self._cancel_requested = False
+        self._bg_thread = None
+        
         # Wire up events
         self.send_button.Click += self.on_send_click
         self.input_textbox.KeyDown += self.on_input_keydown
@@ -289,49 +282,19 @@ class StandardsChatWindow(Window):
         # Focus input box
         self.Loaded += lambda s, e: self.input_textbox.Focus()
     
-    def Close(self):
-        """Override Close to handle cross-thread calls from pyRevit reload."""
-        try:
-            # First check if window is already closed/disposed
-            try:
-                _ = self.IsVisible
-            except Exception:
-                # Window is disposed, nothing to do
-                return
-                
-            if self.Dispatcher.CheckAccess():
-                # We're on the UI thread - close normally
-                try:
-                    Window.Close(self)
-                except Exception:
-                    # Already closing or disposed
-                    pass
-            else:
-                # Called from a different thread (e.g. pyRevit reload)
-                # Try to dispatch to UI thread with timeout
-                try:
-                    self.Dispatcher.BeginInvoke(
-                        System.Action(lambda: self._safe_close())
-                    )
-                except Exception:
-                    # Dispatcher may be shut down already
-                    pass
-        except Exception:
-            # Window may already be closed or disposed - ignore
-            pass
-    
-    def _safe_close(self):
-        """Safely close window on UI thread"""
-        try:
-            if not self.IsVisible:
-                return
-            Window.Close(self)
-        except Exception:
-            pass
-
     def on_closed(self, sender, args):
         """Handle cleanup when window closes"""
         try:
+            # Signal the background query thread to stop BEFORE nulling shared
+            # references so the thread doesn't hit a NullReferenceError mid-flight.
+            self._cancel_requested = True
+            if hasattr(self, '_bg_thread') and self._bg_thread is not None:
+                try:
+                    self._bg_thread.Join(500)  # brief wait; IsBackground ensures no hard block
+                except Exception:
+                    pass
+                self._bg_thread = None
+            
             # Stop any timers
             if hasattr(self, 'typing_timer') and self.typing_timer:
                 try:
@@ -1253,6 +1216,8 @@ class StandardsChatWindow(Window):
         def process_query():
             try:
                 debug_log("process_query started")
+                if getattr(self, '_cancel_requested', False):
+                    return
                 # Use direct user input for search - vector search handles semantics natively
                 search_query = user_input
                 keyword_tokens_in = 0
@@ -1317,6 +1282,8 @@ class StandardsChatWindow(Window):
                         debug_log(u"ERROR in on_chunk callback: {}".format(safe_str(e)))
                 
                 # Get streaming response from Claude
+                if getattr(self, '_cancel_requested', False):
+                    return
                 response = self.anthropic.get_response_stream(
                     user_query=user_input,
                     notion_pages=relevant_pages,
@@ -1353,22 +1320,26 @@ class StandardsChatWindow(Window):
                 # Calculate duration and log interaction
                 duration_seconds = time.time() - query_start_time
                 try:
-                    self.usage_logger.log_interaction(
-                        query=user_input,
-                        response_preview=response.get('text', ''),
-                        source_count=len(response.get('sources', [])),
-                        duration_seconds=duration_seconds,
-                        revit_context=revit_context,
-                        session_id=self.current_session_id,
-                        screenshot_base64=screenshot_base64,
-                        source_urls=source_urls,
-                        input_tokens=input_tokens,
-                        output_tokens=output_tokens,
-                        ai_model=ai_model
-                    )
+                    if not getattr(self, '_cancel_requested', False) and self.usage_logger:
+                        self.usage_logger.log_interaction(
+                            query=user_input,
+                            response_preview=response.get('text', ''),
+                            source_count=len(response.get('sources', [])),
+                            duration_seconds=duration_seconds,
+                            revit_context=revit_context,
+                            session_id=self.current_session_id,
+                            screenshot_base64=screenshot_base64,
+                            source_urls=source_urls,
+                            input_tokens=input_tokens,
+                            output_tokens=output_tokens,
+                            ai_model=ai_model
+                        )
                 except Exception as log_error:
                     # print("Error logging interaction: {}".format(str(log_error)))
                     pass
+                
+                if getattr(self, '_cancel_requested', False):
+                    return
                 
                 # Update conversation history
                 self.conversation.append({
@@ -1481,9 +1452,11 @@ class StandardsChatWindow(Window):
                 self.Dispatcher.Invoke(self.enable_input)
         
         # Start background thread
+        self._cancel_requested = False  # reset for this new query
         thread = Thread(ThreadStart(process_query))
         thread.SetApartmentState(System.Threading.ApartmentState.STA)
         thread.IsBackground = True
+        self._bg_thread = thread
         thread.Start()
     
     def rotate_loading_message(self, sender, e):
@@ -1872,8 +1845,7 @@ class StandardsChatWindow(Window):
         # Set style based on user/assistant
         if is_user:
             border.Style = self.FindResource("MessageBubbleUser")
-            # Uses default foreground from style or parent (which should be black/primary now)
-            text_color = self.FindResource("TextPrimaryColor")
+            text_color = SolidColorBrush(Color.FromRgb(255, 255, 255))
         else:
             border.Style = self.FindResource("MessageBubbleAssistant")
             text_color = self.FindResource("TextPrimaryColor")
@@ -1882,6 +1854,8 @@ class StandardsChatWindow(Window):
         textblock = TextBlock()
         textblock.TextWrapping = TextWrapping.Wrap
         textblock.Foreground = text_color
+        if is_user:
+            textblock.FontWeight = System.Windows.FontWeights.SemiBold
 
         # Basic markdown parsing for assistant messages
         if False: # Disabled for user messages too if we want markdown there
