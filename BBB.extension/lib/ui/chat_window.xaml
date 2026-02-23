@@ -292,6 +292,7 @@
             <ScrollViewer Grid.Row="0"
                          x:Name="MessageScrollViewer"
                          VerticalScrollBarVisibility="Auto"
+                         HorizontalScrollBarVisibility="Disabled"
                          Padding="10,15">
                 <StackPanel x:Name="MessagesPanel">
                     <!-- Welcome message generated dynamically in Python -->
