@@ -1,4 +1,9 @@
 import json
+import os
+
+# Resolve config path relative to this script's location (dev/ subfolder)
+_script_dir = os.path.dirname(os.path.abspath(__file__))
+_config_path = os.path.join(_script_dir, '..', 'BBB.extension', 'config', 'config.json')
 
 new_prompt = (
     "## WHO YOU ARE\n\n"
@@ -44,12 +49,12 @@ new_prompt = (
     "Use regular quotes, double hyphens (--), and three periods (...) instead."
 )
 
-with open('BBB.extension/config/config.json', 'r') as f:
+with open(_config_path, 'r') as f:
     config = json.load(f)
 
 config['anthropic']['system_prompt'] = new_prompt
 
-with open('BBB.extension/config/config.json', 'w') as f:
+with open(_config_path, 'w') as f:
     json.dump(config, f, indent=2)
 
 print('Done. Prompt length: {} chars'.format(len(new_prompt)))

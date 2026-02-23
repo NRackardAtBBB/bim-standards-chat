@@ -9,9 +9,10 @@ import sys
 import os
 import importlib.util
 
-# Add extension lib path
+# Add extension lib path — script lives in dev/, so BBB.extension is one level up
 script_dir = os.path.dirname(os.path.abspath(__file__))
-lib_path = os.path.join(script_dir, 'BBB.extension', 'lib')
+repo_root = os.path.join(script_dir, '..')
+lib_path = os.path.join(repo_root, 'BBB.extension', 'lib')
 sys.path.insert(0, lib_path)
 
 # Import sync module directly without triggering package __init__.py
