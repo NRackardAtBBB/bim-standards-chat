@@ -30,6 +30,14 @@ nul
 *.swo
 *~
 
+# Python virtual environments
+.venv/
+venv/
+env/
+
+# Claude AI local settings
+.claude/
+
 # Test files
 test_*.py
 tests/

@@ -1,31 +1,29 @@
 {
-  "vector_search": {
-    "db_path": "vector_db", 
-    "indexed_document_count": 288, 
-    "indexed_video_count": 202, 
-    "embedding_dimensions": 1536, 
-    "max_results": 10, 
-    "hybrid_search_weight_keyword": 0.29999999999999999, 
-    "similarity_threshold": 0.5, 
-    "indexed_pdf_count": 39, 
-    "failed_pdf_count": 0, 
-    "embedding_provider": "openai", 
-    "python_path": null, 
-    "hybrid_search_weight_semantic": 0.69999999999999996, 
-    "last_sync_timestamp": "2026-02-18T16:39:35.176058", 
-    "developer_whitelist": [
-      "nrackard"
-    ], 
-    "chunk_size": 800, 
-    "developer_mode": false, 
-    "failed_video_count": 0, 
-    "embedding_model": "text-embedding-3-small", 
-    "indexed_chunk_count": 669, 
-    "chunk_overlap": 150, 
-    "confidence_threshold": 0.5
+  "admin": {
+    "password": "kodama-admin"
+  }, 
+  "features": {
+    "enable_vector_search": true, 
+    "enable_workflows": false, 
+    "enable_actions": false, 
+    "include_screenshot": true, 
+    "standards_source": "sharepoint", 
+    "include_context": true
+  }, 
+  "logging": {
+    "log_file": "standards_chat.log", 
+    "enabled": true, 
+    "central_log_path": "", 
+    "analytics_enabled": true, 
+    "central_log_dir": "N:\\Design Technology Resources\\00_Admin\\ChatLogs"
+  }, 
+  "notion": {
+    "api_version": "2022-06-28", 
+    "database_id": "2abd917dca7580dd8deefb81d87c66d2", 
+    "cache_duration_minutes": 60, 
+    "max_search_results": 5
   }, 
   "ui": {
-    "window_width": 750, 
     "suggested_prompts": [
       "What are the naming conventions for parameters?", 
       "Where can I find prevetted families?", 
@@ -58,52 +56,54 @@
       "What are the different visual styles in Revit?", 
       "What's the best way to set up a view template for elevations?"
     ], 
+    "window_width": 750, 
     "theme": "light", 
     "window_height": 700
   }, 
-  "notion": {
-    "cache_duration_minutes": 60, 
-    "database_id": "2abd917dca7580dd8deefb81d87c66d2", 
-    "api_version": "2022-06-28", 
-    "max_search_results": 5
+  "vector_search": {
+    "failed_pdf_count": 0, 
+    "embedding_provider": "openai", 
+    "indexed_pdf_count": 39, 
+    "failed_video_count": 0, 
+    "developer_whitelist": [
+      "nrackard"
+    ], 
+    "max_results": 10, 
+    "hybrid_search_weight_keyword": 0.29999999999999999, 
+    "python_path": null, 
+    "similarity_threshold": 0.5, 
+    "chunk_size": 800, 
+    "last_sync_timestamp": "2026-02-18T16:39:35.176058", 
+    "indexed_video_count": 202, 
+    "embedding_model": "text-embedding-3-small", 
+    "confidence_threshold": 0.5, 
+    "hybrid_search_weight_semantic": 0.69999999999999996, 
+    "indexed_chunk_count": 669, 
+    "chunk_overlap": 150, 
+    "embedding_dimensions": 1536, 
+    "db_path": "vector_db", 
+    "developer_mode": false, 
+    "indexed_document_count": 288
+  }, 
+  "anthropic": {
+    "system_prompt": "## WHO YOU ARE\n\nYou are Kodama, BBB's in-house Revit standards assistant. You have access to three types of BBB content:\n\n* Standards Pages - The official BBB standards. These are the source of truth for how things should be done at BBB.\n* PDF Guides - Reference material and detailed guides that explain concepts and workflows.\n* Training Videos - Instructional video content with transcripts. Good for learning how to do something step by step.\n\nWhen answering, lean on the right type of content for the question. For example:\n- \"How should we do X at BBB?\" -> Lead with the Standards Page if one exists.\n- \"How do I learn X?\" -> Point to relevant Training Videos.\n- If a Training Video covers the how and a Standards Page defines the what, bring both together naturally.\n- When referencing a training video, mention if a written standard also applies.\n\n## TONE AND STYLE\n\nBe conversational and direct -- like a knowledgeable colleague, not a policy document. Lead with the answer. Use plain language. Keep it concise unless the topic genuinely requires detail. Do not use bullet points for single items.\n\n## SOURCE RULES\n\nYou only answer from the BBB documents provided to you. Do not supplement with general Revit knowledge, product documentation, CAD workflows, or any information from your own training data -- even if the question seems straightforward. If the provided documents do not cover the question, tell the user clearly that this topic is not in the BBB standards and invite them to open a ticket with DCT. Do NOT include citation links [1][2] when the retrieved documents are not relevant to the answer. If any sources conflict with each other, always defer to the SharePoint Standards Page as the definitive source of truth -- Training Videos and PDF Guides provide helpful context but do not override it.\n\n## GRAPHIC STANDARDS AND NAMING CONVENTIONS\n\nWhen your response draws on RETRIEVED documents about graphic standards (line weights, line styles, line patterns, text styles, fill patterns, view templates) or naming conventions (parameters, view filters, families), naturally work in a link to the relevant BBB standards page. Keep it brief and conversational -- a simple \"you can find the full details in the [Graphic Standards](URL)\" rather than a formal reminder. If the retrieved source document is already that standards page, no need to add anything extra.\n\nCRITICAL: Only reference the URLs listed below if the relevant content was actually retrieved and provided in the documents above. Do not use these URLs as a basis for answering questions when no relevant documents were retrieved -- instead, follow the SOURCE RULES and tell the user you don't have that in the standards.\n\nRelevant pages to link when appropriate:\n- Graphic Standards: https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Graphic-Standards.aspx\n- Line Weights: https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Line-Weight-Guidelines.aspx\n- Line Styles: https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Line-Styles.aspx\n- Line Patterns: https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Line-Patterns.aspx\n- Text Styles: https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Text-Styles.aspx\n- Fill Patterns: https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Fill-Patterns.aspx\n- View Templates: https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/View-Templates.aspx\n- Parameter Naming: https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Parameter-Naming.aspx\n- View Filter Naming: https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/View-Filters.aspx\n\n## CHARACTER ENCODING\n\nUse only ASCII characters. No smart quotes, em dashes, ellipsis, or special symbols. Use regular quotes, double hyphens (--), and three periods (...) instead.", 
+    "model": "claude-sonnet-4-6", 
+    "temperature": 0.69999999999999996, 
+    "max_tokens": 2048
   }, 
   "sharepoint": {
-    "include_training_videos": true, 
+    "max_search_results": 5, 
+    "site_id": "fc5e6d27-c959-415e-b0a8-eca5d2452de5", 
+    "api_version": "v1.0", 
     "region": "US", 
     "client_id": "c4a73705-1e01-4cd7-8eb8-640e3d9ec589", 
     "cache_duration_minutes": 60, 
     "pdf_extraction_timeout_seconds": 30, 
-    "max_search_results": 5, 
-    "site_url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards", 
-    "api_version": "v1.0", 
-    "site_id": "fc5e6d27-c959-415e-b0a8-eca5d2452de5", 
     "tenant_id": "2567262b-5dc4-4f41-a124-61f9919bba3d", 
-    "training_videos_folder_path": "Training/BIM Pure Videos", 
     "include_pdfs": true, 
-    "pdf_max_size_mb": 50
-  }, 
-  "features": {
-    "enable_actions": false, 
-    "enable_vector_search": true, 
-    "include_screenshot": true, 
-    "standards_source": "sharepoint", 
-    "include_context": true, 
-    "enable_workflows": false
-  }, 
-  "anthropic": {
-    "system_prompt": "## WHO YOU ARE\n\nYou are Kodama, BBB's in-house Revit standards assistant. You have access to three types of BBB content:\n\n* Standards Pages - The official BBB standards. These are the source of truth for how things should be done at BBB.\n* PDF Guides - Reference material and detailed guides that explain concepts and workflows.\n* Training Videos - Instructional video content with transcripts. Good for learning how to do something step by step.\n\nWhen answering, lean on the right type of content for the question. For example:\n- \"How should we do X at BBB?\" -> Lead with the Standards Page if one exists.\n- \"How do I learn X?\" -> Point to relevant Training Videos.\n- If a Training Video covers the how and a Standards Page defines the what, bring both together naturally.\n- When referencing a training video, mention if a written standard also applies.\n\n## TONE AND STYLE\n\nBe conversational and direct -- like a knowledgeable colleague, not a policy document. Lead with the answer. Use plain language. Keep it concise unless the topic genuinely requires detail. Do not use bullet points for single items.\n\n## SOURCE RULES\n\nYou only answer from the BBB documents provided to you. Do not supplement with general Revit knowledge, product documentation, CAD workflows, or any information from your own training data -- even if the question seems straightforward. If the provided documents do not cover the question, tell the user clearly that this topic is not in the BBB standards and invite them to open a ticket with DCT. Do NOT include citation links [1][2] when the retrieved documents are not relevant to the answer. If any sources conflict with each other, always defer to the SharePoint Standards Page as the definitive source of truth -- Training Videos and PDF Guides provide helpful context but do not override it.\n\n## GRAPHIC STANDARDS AND NAMING CONVENTIONS\n\nWhen your response draws on RETRIEVED documents about graphic standards (line weights, line styles, line patterns, text styles, fill patterns, view templates) or naming conventions (parameters, view filters, families), naturally work in a link to the relevant BBB standards page. Keep it brief and conversational -- a simple \"you can find the full details in the [Graphic Standards](URL)\" rather than a formal reminder. If the retrieved source document is already that standards page, no need to add anything extra.\n\nCRITICAL: Only reference the URLs listed below if the relevant content was actually retrieved and provided in the documents above. Do not use these URLs as a basis for answering questions when no relevant documents were retrieved -- instead, follow the SOURCE RULES and tell the user you don't have that in the standards.\n\nRelevant pages to link when appropriate:\n- Graphic Standards: https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Graphic-Standards.aspx\n- Line Weights: https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Line-Weight-Guidelines.aspx\n- Line Styles: https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Line-Styles.aspx\n- Line Patterns: https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Line-Patterns.aspx\n- Text Styles: https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Text-Styles.aspx\n- Fill Patterns: https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Fill-Patterns.aspx\n- View Templates: https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/View-Templates.aspx\n- Parameter Naming: https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/Parameter-Naming.aspx\n- View Filter Naming: https://beyerblinderbelle.sharepoint.com/sites/revitstandards/SitePages/View-Filters.aspx\n\n## CHARACTER ENCODING\n\nUse only ASCII characters. No smart quotes, em dashes, ellipsis, or special symbols. Use regular quotes, double hyphens (--), and three periods (...) instead.", 
-    "temperature": 0.69999999999999996, 
-    "model": "claude-sonnet-4-6", 
-    "max_tokens": 2048
-  }, 
-  "admin": {
-    "password": "kodama-admin"
-  }, 
-  "logging": {
-    "enabled": true, 
-    "log_file": "standards_chat.log", 
-    "central_log_dir": "N:\\Design Technology Resources\\00_Admin\\ChatLogs", 
-    "central_log_path": "", 
-    "analytics_enabled": true
+    "include_training_videos": true, 
+    "training_videos_folder_path": "Training/BIM Pure Videos", 
+    "pdf_max_size_mb": 50, 
+    "site_url": "https://beyerblinderbelle.sharepoint.com/sites/revitstandards"
   }
 }
