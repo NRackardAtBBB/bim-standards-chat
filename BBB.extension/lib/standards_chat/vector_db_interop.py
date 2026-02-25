@@ -93,7 +93,7 @@ def _find_pyrevit_cpython():
     for candidate_cmd in (['py', '-3'], ['python3'], ['python']):
         try:
             r = subprocess.Popen(
-                candidate_cmd + ['-c', 'import numpy; print("ok")'],
+                candidate_cmd + ['-c', 'import sys; print("ok")'],
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                 shell=False, creationflags=0x08000000
             )
@@ -122,6 +122,17 @@ except RuntimeError as _e:
 
 
 # ---------------------------------------------------------------------------
+# Numpy install status (used by script.py and setup_progress_window.py)
+# ---------------------------------------------------------------------------
+_numpy_setup_status = {
+    'phase':      'idle',   # 'idle' | 'running' | 'done' | 'error'
+    'message':    u'',
+    'error':      None,
+    'start_time': None,
+}
+
+
+# ---------------------------------------------------------------------------
 # DB sync status (used by script.py and db_update_window.py)
 # ---------------------------------------------------------------------------
 _db_sync_status = {
@@ -130,6 +141,74 @@ _db_sync_status = {
     'error':      None,
     'start_time': None,
 }
+
+
+def check_numpy_installed():
+    """
+    Return True if numpy is available in pyRevit's CPython.
+    Uses a fast filesystem check when the full path to python.exe is known;
+    falls back to a subprocess probe for PATH-based python.
+    """
+    if _PYREVIT_PYTHON is None:
+        return False
+    try:
+        # Fast path: full exe path — check site-packages directory directly
+        if os.sep in _PYREVIT_PYTHON:
+            engine_dir = os.path.dirname(os.path.abspath(_PYREVIT_PYTHON))
+            numpy_init = os.path.join(engine_dir, 'Lib', 'site-packages',
+                                      'numpy', '__init__.py')
+            if os.path.isfile(numpy_init):
+                return True
+        # Fallback: PATH-based python — use a subprocess probe
+        r = subprocess.Popen(
+            [_PYREVIT_PYTHON, '-c', 'import numpy; print("ok")'],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            shell=False, creationflags=0x08000000,
+        )
+        out, _ = r.communicate()
+        if isinstance(out, bytes):
+            out = out.decode('utf-8', errors='replace')
+        return r.returncode == 0 and 'ok' in out
+    except Exception as exc:
+        debug_log('check_numpy_installed error: {}'.format(exc))
+        return False
+
+
+def start_numpy_install_async():
+    """
+    Start a background thread that pip-installs numpy into pyRevit's CPython.
+    Progress is written to the module-level ``_numpy_setup_status`` dict.
+    """
+    def _worker():
+        _numpy_setup_status['phase']      = 'running'
+        _numpy_setup_status['message']    = u'Installing numpy (one-time setup)\u2026'
+        _numpy_setup_status['error']      = None
+        _numpy_setup_status['start_time'] = time.time()
+        try:
+            proc = subprocess.Popen(
+                [_PYREVIT_PYTHON, '-m', 'pip', 'install', 'numpy',
+                 '--quiet', '--disable-pip-version-check'],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                shell=False, creationflags=0x08000000,
+            )
+            proc.communicate()   # wait; discard output
+            if proc.returncode == 0:
+                elapsed = time.time() - _numpy_setup_status['start_time']
+                debug_log('numpy install complete in {:.1f}s'.format(elapsed))
+                _numpy_setup_status['phase']   = 'done'
+                _numpy_setup_status['message'] = u'numpy installed successfully.'
+            else:
+                _numpy_setup_status['phase'] = 'error'
+                _numpy_setup_status['error'] = u'pip exited with code {}'.format(
+                    proc.returncode)
+        except Exception as exc:
+            debug_log('numpy install error: {}'.format(exc))
+            _numpy_setup_status['phase'] = 'error'
+            _numpy_setup_status['error'] = u'{}'.format(exc)
+
+    t = _threading.Thread(target=_worker, name='kodama-numpy-install')
+    t.daemon = True
+    t.start()
 
 
 def check_db_needs_update(config_manager):

@@ -17,6 +17,20 @@ lib_path = os.path.dirname(script_dir)
 if lib_path not in sys.path:
     sys.path.insert(0, lib_path)
 
+# Ensure numpy is available (installs once if missing).
+# Safety net for cases where the setup UI was skipped or this script
+# is run directly from the command line.
+try:
+    import numpy  # noqa: F401
+except ImportError:
+    import subprocess as _subp
+    _subp.Popen(
+        [sys.executable, '-m', 'pip', 'install', 'numpy',
+         '--quiet', '--disable-pip-version-check'],
+        stdout=_subp.PIPE, stderr=_subp.PIPE,
+        shell=False, creationflags=0x08000000,
+    ).communicate()
+
 from standards_chat.config_manager import ConfigManager
 from standards_chat.vector_db_client import VectorDBClient
 
