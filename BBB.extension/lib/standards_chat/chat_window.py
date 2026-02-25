@@ -262,6 +262,10 @@ class StandardsChatWindow(forms.WPFWindow):
         # before shared references are nulled.
         self._cancel_requested = False
         self._bg_thread = None
+
+        # Suppress DB update prompt for the rest of the session once the user
+        # has responded to it (either synced or deferred).
+        self._db_update_dismissed = False
         
         # Wire up events
         self.send_button.Click += self.on_send_click
@@ -1453,7 +1457,28 @@ class StandardsChatWindow(forms.WPFWindow):
             finally:
                 # Re-enable input
                 self.Dispatcher.Invoke(self.enable_input)
-        
+
+                # After every response, check once per session whether the
+                # network has a newer standards DB.  We skip this if cancelled,
+                # if a sync is already running, or if the user already responded.
+                if (not getattr(self, '_cancel_requested', True)
+                        and not getattr(self, '_db_update_dismissed', True)
+                        and self.vector_db_client is not None):
+                    try:
+                        from standards_chat import vector_db_interop as _vdb
+                        # Allow check when idle, or after a previous sync completed/errored
+                        sync_phase = _vdb._db_sync_status.get('phase', 'idle')
+                        if (sync_phase in ('idle', 'done', 'error')
+                                and _vdb.check_db_needs_update(self.config)):
+                            # Reset status so the new sync starts clean
+                            _vdb._db_sync_status['phase']      = 'idle'
+                            _vdb._db_sync_status['message']    = u''
+                            _vdb._db_sync_status['error']      = None
+                            _vdb._db_sync_status['start_time'] = None
+                            self.Dispatcher.Invoke(self._show_db_update_prompt)
+                    except Exception:
+                        pass
+
         # Start background thread
         self._cancel_requested = False  # reset for this new query
         thread = Thread(ThreadStart(process_query))
@@ -1876,6 +1901,30 @@ class StandardsChatWindow(forms.WPFWindow):
         # Only enable send button if there's text in the input
         self.send_button.IsEnabled = len(self.input_textbox.Text.strip()) > 0
         self.input_textbox.Focus()
+
+    def _show_db_update_prompt(self):
+        """
+        Show the mid-session DB update prompt (called on the UI thread).
+        Marks the session as handled regardless of the user's choice so we
+        never prompt more than once per Kodama session.
+        """
+        self._db_update_dismissed = True   # suppress any further checks
+        try:
+            from standards_chat.db_update_prompt_window import DBUpdatePromptWindow
+            from standards_chat import vector_db_interop as _vdb
+            prompt = DBUpdatePromptWindow()
+            prompt.Owner = self
+            prompt.ShowDialog()
+            if prompt.sync_now:
+                _vdb.start_db_sync_async(self.config)
+                from standards_chat.db_update_window import DBUpdateWindow
+                toast = DBUpdateWindow(
+                    status_dict=_vdb._db_sync_status,
+                    startup=False
+                )
+                toast.Show()
+        except Exception as _ex:
+            debug_log('_show_db_update_prompt error: {}'.format(_ex))
     
     def add_message(self, text, is_user=False, sources=None):
         """Add a message bubble with avatar to the chat"""

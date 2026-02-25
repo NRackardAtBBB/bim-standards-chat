@@ -49,27 +49,54 @@ class ConfigManager:
         self.config['user'] = user_prefs
 
     def _save_user_prefs(self, user_prefs):
-        """Save user preferences to AppData"""
+        """Save user preferences to AppData (atomic write to avoid corruption)."""
         # Create directory only when actually saving
         if not os.path.exists(self.user_data_dir):
             try:
                 os.makedirs(self.user_data_dir)
             except OSError:
                 pass
-        
+
+        json_str = json.dumps(user_prefs, indent=2, ensure_ascii=False)
+        # json.dumps returns str in Python 3 (unicode) and str/unicode in IronPython 2.7.
+        # Normalise to text so io.open(mode='w') is happy in both runtimes.
+        if isinstance(json_str, bytes):
+            json_str = json_str.decode('utf-8')
+
+        # Write to a temp file first, then replace — ensures the live file is
+        # never left empty/corrupt if the process is killed mid-write.
+        tmp_path = self.user_prefs_path + '.tmp'
         f = None
         try:
-            f = io.open(self.user_prefs_path, 'w', encoding='utf-8')
-            json_str = json.dumps(user_prefs, indent=2, ensure_ascii=False)
-            f.write(unicode(json_str))
+            f = io.open(tmp_path, 'w', encoding='utf-8')
+            f.write(json_str)
+            f.close()
+            f = None
+            # Atomic replace (os.replace is available in Python 3.3+ and
+            # IronPython 2.7.x; falls back to remove+rename for safety)
+            try:
+                os.replace(tmp_path, self.user_prefs_path)
+            except AttributeError:
+                # IronPython 2.7 may lack os.replace
+                try:
+                    os.remove(self.user_prefs_path)
+                except OSError:
+                    pass
+                os.rename(tmp_path, self.user_prefs_path)
         except Exception:
             pass
         finally:
             if f:
                 try:
                     f.close()
-                except:
+                except Exception:
                     pass
+            # Clean up temp file if something went wrong before the rename
+            try:
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+            except Exception:
+                pass
 
     def _get_extension_dir(self):
         """Get the extension directory path"""
@@ -161,6 +188,15 @@ class ConfigManager:
         config_to_save = self.config.copy()
         if 'user' in config_to_save:
             del config_to_save['user']
+
+        # python_path is machine-specific -- strip it so the shared network
+        # config.json stays clean and other users don't inherit a path that
+        # only resolves on one machine.
+        import copy as _copy
+        vs = config_to_save.get('vector_search', {})
+        if isinstance(vs, dict) and 'python_path' in vs:
+            config_to_save['vector_search'] = _copy.copy(vs)
+            del config_to_save['vector_search']['python_path']
 
         filepath = os.path.join(self.config_dir, 'config.json')
         f = None

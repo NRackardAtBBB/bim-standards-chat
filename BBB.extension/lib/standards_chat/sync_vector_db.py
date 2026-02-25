@@ -22,7 +22,7 @@ try:
 except:
     pass
 
-def main():
+def main(progress_callback=None):
     """Perform SharePoint to vector DB sync"""
     try:
         # Import modules directly to avoid triggering package __init__.py
@@ -81,10 +81,11 @@ def main():
             print("ERROR: Vector search is not available for your user.")
             sys.exit(1)
         
-        def progress_callback(message, current, total):
-            """Print progress updates"""
-            print("PROGRESS: {}".format(message))
-        
+        if progress_callback is None:
+            def progress_callback(message, current, total):
+                """Fallback: plain text progress updates"""
+                print("PROGRESS: {}".format(message))
+
         print("Starting sync...")
         result = sharepoint_client.sync_to_vector_db(
             vector_db_client,

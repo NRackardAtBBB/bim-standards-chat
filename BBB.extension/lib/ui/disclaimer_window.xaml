@@ -141,7 +141,8 @@
         </Border>
         
         <!-- Content -->
-        <ScrollViewer Grid.Row="1" 
+        <ScrollViewer x:Name="DisclaimerScrollView"
+                      Grid.Row="1" 
                       VerticalScrollBarVisibility="Auto" 
                       Padding="5,0,10,0"
                       Background="{StaticResource SurfaceColor}"
@@ -266,7 +267,8 @@
         </ScrollViewer>
         
         <!-- Buttons -->
-        <Border Grid.Row="2" 
+        <Border x:Name="DisclaimerButtonsBar"
+                Grid.Row="2" 
                 Background="{StaticResource SurfaceColor}" 
                 BorderBrush="{StaticResource BorderColor}"
                 BorderThickness="0,1,0,0"
@@ -301,5 +303,67 @@
             </Grid>
         </Border>
         
+        <!-- Install prompt panel — hidden until user clicks I Understand -->
+        <Grid x:Name="InstallPanel"
+              Grid.Row="1" Grid.RowSpan="2"
+              Visibility="Collapsed"
+              Background="{StaticResource SurfaceColor}">
+            <StackPanel VerticalAlignment="Center"
+                        HorizontalAlignment="Center"
+                        MaxWidth="460"
+                        Margin="30">
+
+                <!-- Tick icon -->
+                <Border Width="56" Height="56"
+                        CornerRadius="28"
+                        Background="#E6F4EA"
+                        HorizontalAlignment="Center"
+                        Margin="0,0,0,20">
+                    <TextBlock Text="✓"
+                               FontSize="28"
+                               FontWeight="Bold"
+                               Foreground="#107C10"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center"/>
+                </Border>
+
+                <!-- Heading -->
+                <TextBlock Text="You're all set!"
+                           FontSize="20"
+                           FontWeight="SemiBold"
+                           TextAlignment="Center"
+                           Margin="0,0,0,14"/>
+
+                <!-- Body -->
+                <TextBlock TextAlignment="Center"
+                           FontSize="12"
+                           Foreground="{StaticResource TextSecondaryColor}"
+                           LineHeight="20"
+                           Margin="0,0,0,10"
+                           Text="Kodama needs a couple of minutes to finish setting up on your machine."/>
+                <TextBlock TextAlignment="Center"
+                           FontSize="12"
+                           Foreground="{StaticResource TextSecondaryColor}"
+                           LineHeight="20"
+                           Margin="0,0,0,24"
+                           Text="It all happens quietly in the background — carry on in Revit as normal. A small notification will let you know when it's ready to open."/>
+
+                <!-- Primary action -->
+                <Button x:Name="SetupNowButton"
+                        Content="Get Kodama ready"
+                        Style="{StaticResource PrimaryButtonStyle}"
+                        HorizontalAlignment="Center"
+                        MinWidth="200"
+                        Margin="0,0,0,10"/>
+
+                <!-- Secondary action -->
+                <Button x:Name="SkipInstallButton"
+                        Content="Not right now"
+                        Style="{StaticResource LinkButtonStyle}"
+                        HorizontalAlignment="Center"/>
+
+            </StackPanel>
+        </Grid>
+
     </Grid>
 </Window>

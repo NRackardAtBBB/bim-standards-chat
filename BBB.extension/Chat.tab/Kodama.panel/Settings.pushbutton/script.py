@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import sys; sys.dont_write_bytecode = True  # never write .pyc to network share
 """
 Settings - Configuration Interface
 Opens settings dialog for API keys and configuration

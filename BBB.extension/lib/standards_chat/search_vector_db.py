@@ -77,11 +77,15 @@ def main():
             _write_result({'success': False, 'error': 'No query provided'}, output_file)
             return 1
 
+        import time as _time
+        t0_total = _time.time()
         _debug_log("Starting search for query: {}".format(query[:80]))
 
         # Initialize clients
+        t0_init = _time.time()
         config = ConfigManager()
         vector_db = VectorDBClient(config)
+        _debug_log("TIMING VectorDBClient init={:.2f}s".format(_time.time() - t0_init))
 
         # Check if vector search is enabled and user is authorized
         if not config.get_config('features.enable_vector_search', False):
@@ -93,9 +97,11 @@ def main():
             return 1
 
         # Perform hybrid search
+        t0_search = _time.time()
         results = vector_db.hybrid_search(query=query, deduplicate=True)
+        _debug_log("TIMING hybrid_search={:.2f}s".format(_time.time() - t0_search))
 
-        _debug_log("Search complete: {} results".format(len(results)))
+        _debug_log("TIMING total_script={:.2f}s results={}".format(_time.time() - t0_total, len(results)))
 
         _write_result({'success': True, 'results': results}, output_file)
         return 0

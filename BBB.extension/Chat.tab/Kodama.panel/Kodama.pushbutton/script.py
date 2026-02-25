@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import sys; sys.dont_write_bytecode = True  # never write .pyc to network share
 """
 Standards Chat - Main Entry Point
 Opens the chat interface for querying BBB Revit standards
@@ -49,8 +50,17 @@ def main():
             has_accepted = config_manager.get('user', 'has_seen_disclaimer', False)
         
         if not has_accepted:
+            # Check cheaply whether the local venv needs to be created so the
+            # disclaimer window can show the install-prompt panel only when needed.
+            try:
+                from standards_chat.vector_db_interop import _LOCAL_VENV_PYTHON
+                _setup_needed = not os.path.isfile(_LOCAL_VENV_PYTHON)
+            except Exception:
+                _setup_needed = False
+
             # Show disclaimer window (modal)
             disclaimer = DisclaimerWindow()
+            disclaimer._setup_needed = _setup_needed
             result = disclaimer.ShowDialog()
             
             # If user declined or closed window, exit
@@ -69,14 +79,64 @@ def main():
                 config_manager.config['user']['disclaimer_accepted_date'] = datetime.now().isoformat()
                 config_manager.config['user']['disclaimer_version'] = '1.0'
                 config_manager.save()
+
+            # If the user chose "Not right now" on the install panel, stop here.
+            # Disclaimer is saved — they won't be prompted again.  Setup will
+            # start automatically the next time they open Kodama.
+            if not getattr(disclaimer, 'wants_to_launch', True):
+                return
         
-        # Check if window is already open
-        # Note: script.get_window may not work as expected with custom Window classes
-        # For now, just create a new window each time
-        
-        # Create and show new window
-        chat_window = StandardsChatWindow()
-        chat_window.Show()
+        # ------------------------------------------------------------------
+        # Helper: create and show the chat window, deferring if venv setup
+        # is still running (same logic as before, now in its own function
+        # so it can be called as a callback from DBUpdateWindow).
+        # ------------------------------------------------------------------
+        def _launch_chat_window():
+            chat_window = StandardsChatWindow()
+            setup_deferred = False
+            try:
+                from standards_chat import vector_db_interop as _vdb_inner
+                if _vdb_inner._setup_status.get('phase') == 'running':
+                    toast = getattr(
+                        getattr(chat_window, 'vector_db_client', None),
+                        '_setup_toast', None
+                    )
+                    if toast is not None:
+                        toast.set_launch_callback(chat_window.Show)
+                        setup_deferred = True
+            except Exception:
+                pass
+            if not setup_deferred:
+                chat_window.Show()
+
+        # ------------------------------------------------------------------
+        # Startup DB update check — if the network has a newer standards DB
+        # show a friendly progress window while we sync, then open Kodama.
+        # ------------------------------------------------------------------
+        needs_db_update = False
+        try:
+            from standards_chat import vector_db_interop as _vdb
+            needs_db_update = _vdb.check_db_needs_update(config_manager)
+        except Exception:
+            pass   # non-critical — fall through to normal launch
+
+        if needs_db_update:
+            try:
+                from standards_chat import vector_db_interop as _vdb
+                from standards_chat.db_update_window import DBUpdateWindow
+                _vdb.start_db_sync_async(config_manager)
+                # Show a small bottom-right toast — Kodama opens immediately
+                # in the background while the sync runs.
+                toast = DBUpdateWindow(
+                    status_dict=_vdb._db_sync_status,
+                    startup=False
+                )
+                toast.Show()
+            except Exception:
+                pass  # non-critical — Kodama still opens below
+
+        # Always open Kodama immediately, regardless of whether a sync is running
+        _launch_chat_window()
         
     except Exception as e:
         forms.alert(

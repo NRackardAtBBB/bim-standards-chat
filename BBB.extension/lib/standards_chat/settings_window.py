@@ -181,6 +181,7 @@ class SettingsWindow(forms.WPFWindow):
         self.enable_vector_search.IsChecked = self.config.get('features', {}).get('enable_vector_search', False)
         self._update_vector_search_visibility()
         self._update_vector_search_stats()
+        self._update_local_env_status()
 
         # Search thresholds
         vs_config = self.config.get('vector_search', {})
@@ -300,6 +301,53 @@ class SettingsWindow(forms.WPFWindow):
         else:
             self.vector_search_group.Visibility = System.Windows.Visibility.Collapsed
     
+    def _update_local_env_status(self):
+        """Refresh the local environment status label in the admin panel."""
+        try:
+            from standards_chat.vector_db_interop import get_local_env_status
+            info = get_local_env_status()
+            self.local_env_status_text.Text = (
+                u'{state}\nPath: {path}'.format(**info)
+            )
+        except Exception as exc:
+            self.local_env_status_text.Text = u'Status unavailable: {}'.format(exc)
+
+    def reset_local_venv_click(self, sender, args):
+        """Delete local venv so setup re-runs on next Kodama launch."""
+        if not forms.alert(
+            'This will delete the local Python environment for this machine.\n\n'
+            'Setup will run automatically the next time you open Kodama.\n\nContinue?',
+            title='Reset Local Environment',
+            yes=True, no=True
+        ):
+            return
+        try:
+            from standards_chat.vector_db_interop import reset_local_env
+            ok, msg = reset_local_env(rebuild=False)
+            self._update_local_env_status()
+            forms.alert(msg, title='Local Environment Reset' if ok else 'Error',
+                        warn_icon=not ok)
+        except Exception as exc:
+            forms.alert('Error: {}'.format(exc), title='Error', warn_icon=True)
+
+    def rebuild_local_venv_click(self, sender, args):
+        """Delete local venv and immediately kick off a background rebuild."""
+        if not forms.alert(
+            'This will delete and immediately rebuild the local Python environment.\n\n'
+            'A progress notification will appear while setup runs in the background.\n\nContinue?',
+            title='Reset & Rebuild Local Environment',
+            yes=True, no=True
+        ):
+            return
+        try:
+            from standards_chat.vector_db_interop import reset_local_env
+            ok, msg = reset_local_env(rebuild=True)
+            self._update_local_env_status()
+            forms.alert(msg, title='Local Environment' if ok else 'Error',
+                        warn_icon=not ok)
+        except Exception as exc:
+            forms.alert('Error: {}'.format(exc), title='Error', warn_icon=True)
+
     def _update_vector_search_stats(self):
         """Update vector search statistics display"""
         vs_config = self.config.get('vector_search', {})

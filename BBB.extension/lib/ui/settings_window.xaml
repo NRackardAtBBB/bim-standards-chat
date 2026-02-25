@@ -233,6 +233,38 @@
                         </StackPanel>
                     </GroupBox>
 
+                    <!-- Local Python Environment -->
+                    <GroupBox Header="Local Python Environment">
+                        <StackPanel>
+                            <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="{StaticResource TextSecondaryColor}">
+                                Kodama keeps a local Python environment on this machine to speed up search queries.
+                                Reset it here if setup failed or you want to force a clean reinstall.
+                            </TextBlock>
+                            <TextBlock x:Name="local_env_status_text"
+                                       Text="Checking..."
+                                       FontSize="11"
+                                       Foreground="{StaticResource TextSecondaryColor}"
+                                       Margin="0,6,0,0"
+                                       TextWrapping="Wrap"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                                <Button x:Name="rebuild_local_venv_btn"
+                                        Content="Reset &amp; Rebuild Now"
+                                        Click="rebuild_local_venv_click"
+                                        HorizontalAlignment="Left"
+                                        Padding="15,6"
+                                        Style="{StaticResource PrimaryButtonStyle}"
+                                        ToolTip="Delete the local environment and immediately start a fresh setup in the background."/>
+                                <Button x:Name="reset_local_venv_btn"
+                                        Content="Reset Only (rebuild on next launch)"
+                                        Click="reset_local_venv_click"
+                                        HorizontalAlignment="Left"
+                                        Margin="8,0,0,0"
+                                        Padding="15,6"
+                                        ToolTip="Delete the local environment so that setup runs automatically next time you open Kodama."/>
+                            </StackPanel>
+                        </StackPanel>
+                    </GroupBox>
+
                     <!-- Semantic Search Section -->
                     <GroupBox x:Name="vector_search_group" Header="Semantic Search" Visibility="Collapsed">
                         <StackPanel>

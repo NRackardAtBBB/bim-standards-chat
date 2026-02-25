@@ -1,4 +1,5 @@
 #! python3
+# -*- coding: utf-8 -*-
 """
 Vector database client for semantic search using ChromaDB and OpenAI embeddings.
 Provides chunking, indexing, and hybrid search capabilities for SharePoint content.
@@ -25,6 +26,7 @@ except:
     pass
 
 import json
+import shutil
 from datetime import datetime
 import hashlib
 import time
@@ -75,9 +77,13 @@ class VectorDBClient:
         # Make path absolute relative to config directory
         config_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
         self.db_path = os.path.join(config_dir, 'config', db_path)
-        
+
+        # Use a local copy of the DB to avoid slow SQLite-over-SMB on network drives.
+        # Falls back to the network path transparently if local copy fails.
+        active_db_path = self._ensure_local_db_cache(self.db_path)
+
         self.client = chromadb.PersistentClient(
-            path=self.db_path,
+            path=active_db_path,
             settings=Settings(anonymized_telemetry=False)
         )
         
@@ -93,7 +99,86 @@ class VectorDBClient:
         # Initialize query cache (TTL-based in-memory cache)
         self.query_cache = {}
         self.cache_ttl = 300  # 5 minutes TTL
+
+        # Disk-based embedding cache: avoids re-calling OpenAI for repeated queries.
+        # Embeddings are deterministic per (model, dimensions, text) so no TTL needed.
+        self._embedding_cache_path = os.path.join(
+            os.environ.get('LOCALAPPDATA', os.path.expanduser('~')),
+            'BBB', 'Kodama', 'embedding_cache.json'
+        )
+        self._embedding_cache = None   # loaded lazily on first use
+        self._embedding_cache_dirty = False
     
+    def _ensure_local_db_cache(self, network_db_path):
+        """
+        Ensure a local copy of the vector DB exists and is up-to-date.
+
+        Compares the mtime of chroma.sqlite3 on the network source against the
+        local cache. Copies the entire DB folder if the local copy is missing or
+        older than the network source. Falls back to the network path if anything
+        goes wrong so the app always keeps working.
+
+        Args:
+            network_db_path: Absolute path to the DB on the network share.
+
+        Returns:
+            Path to use for ChromaDB (local cache path, or network path on error).
+        """
+        try:
+            local_db_path = os.path.join(
+                os.environ.get('LOCALAPPDATA', os.path.expanduser('~')),
+                'BBB', 'Kodama', 'vector_db'
+            )
+            network_sentinel = os.path.join(network_db_path, 'chroma.sqlite3')
+            local_sentinel = os.path.join(local_db_path, 'chroma.sqlite3')
+
+            # If network DB doesn't exist, nothing to cache -- use network path as-is.
+            if not os.path.exists(network_sentinel):
+                return network_db_path
+
+            network_mtime = os.path.getmtime(network_sentinel)
+
+            needs_copy = True
+            if os.path.exists(local_sentinel):
+                local_mtime = os.path.getmtime(local_sentinel)
+                if local_mtime >= network_mtime:
+                    needs_copy = False
+
+            if needs_copy:
+                print("[Kodama] Updating local vector DB cache from network...")
+                t0 = time.time()
+                # Remove stale local copy before re-copying
+                if os.path.exists(local_db_path):
+                    shutil.rmtree(local_db_path)
+                shutil.copytree(network_db_path, local_db_path)
+                elapsed = time.time() - t0
+                print("[Kodama] Vector DB cached locally in {:.1f}s".format(elapsed))
+                self._tlog("TIMING db_cache=COPY copy_duration={:.2f}s src={}".format(elapsed, network_db_path))
+            else:
+                self._tlog("TIMING db_cache=HIT local={}".format(local_db_path))
+
+            return local_db_path
+
+        except Exception as e:
+            # Never break the app over a caching failure -- fall back to network path.
+            print("[Kodama] Local DB cache unavailable ({}), using network path.".format(e))
+            self._tlog("TIMING db_cache=ERROR err={}".format(str(e)[:120]))
+            return network_db_path
+
+    def _tlog(self, message):
+        """Write a timing/debug message to the shared debug log."""
+        try:
+            import io
+            from datetime import datetime as _dt
+            log_dir = os.path.join(os.environ.get('APPDATA', ''), 'BBB', 'StandardsAssistant')
+            if not os.path.exists(log_dir):
+                os.makedirs(log_dir)
+            log_path = os.path.join(log_dir, 'debug_log.txt')
+            with io.open(log_path, 'a', encoding='utf-8') as f:
+                f.write(u"{} [vector_db] {}\n".format(_dt.now().isoformat(), message))
+        except Exception:
+            pass
+
     def _get_cache_key(self, query, n_results, search_type='hybrid'):
         """Generate cache key from query parameters."""
         cache_str = "{}|{}|{}".format(query.lower().strip(), n_results, search_type)
@@ -194,22 +279,80 @@ class VectorDBClient:
         
         return chunks
     
+    # ------------------------------------------------------------------
+    # Disk-based embedding cache helpers
+    # ------------------------------------------------------------------
+
+    def _load_embedding_cache(self):
+        """Load the persisted embedding cache from disk (lazy, called once)."""
+        if self._embedding_cache is not None:
+            return
+        try:
+            if os.path.exists(self._embedding_cache_path):
+                with open(self._embedding_cache_path, 'r', encoding='utf-8') as f:
+                    self._embedding_cache = json.load(f)
+                self._tlog("embedding_cache: loaded {} entries from disk".format(
+                    len(self._embedding_cache)))
+            else:
+                self._embedding_cache = {}
+        except Exception as e:
+            self._tlog("embedding_cache: load failed ({}), starting empty".format(e))
+            self._embedding_cache = {}
+
+    def _flush_embedding_cache(self):
+        """Persist any new cache entries to disk."""
+        if not self._embedding_cache_dirty:
+            return
+        try:
+            cache_dir = os.path.dirname(self._embedding_cache_path)
+            if not os.path.exists(cache_dir):
+                os.makedirs(cache_dir)
+            with open(self._embedding_cache_path, 'w', encoding='utf-8') as f:
+                json.dump(self._embedding_cache, f)
+            self._embedding_cache_dirty = False
+        except Exception as e:
+            self._tlog("embedding_cache: flush failed: {}".format(e))
+
+    def _embedding_cache_key(self, text):
+        """Stable cache key: SHA256 of model|dimensions|text."""
+        raw = u"{}|{}|{}".format(self.embedding_model, self.embedding_dimensions, text)
+        return hashlib.sha256(raw.encode('utf-8')).hexdigest()
+
+    # ------------------------------------------------------------------
+
     def get_embedding(self, text):
         """
         Generate embedding vector for text using OpenAI API.
-        
+        Results are cached to disk so repeated queries skip the API call.
+
         Args:
             text: Text to embed
-            
+
         Returns:
             Embedding vector as list of floats
         """
+        self._load_embedding_cache()
+        key = self._embedding_cache_key(text)
+
+        # Cache hit: return without calling OpenAI
+        if key in self._embedding_cache:
+            self._tlog("embedding_cache: HIT")
+            return self._embedding_cache[key]
+
+        # Cache miss: call OpenAI and persist result
+        self._tlog("embedding_cache: MISS – calling OpenAI")
         response = self.openai_client.embeddings.create(
             model=self.embedding_model,
             input=text,
             dimensions=self.embedding_dimensions
         )
-        return response.data[0].embedding
+        embedding = response.data[0].embedding
+
+        self._embedding_cache[key] = embedding
+        self._embedding_cache_dirty = True
+        self._flush_embedding_cache()
+
+        return embedding
     
     def get_embeddings_batch(self, texts):
         """
@@ -366,13 +509,17 @@ class VectorDBClient:
             n_results = self.max_results
         
         # Generate query embedding
+        t0_embed = time.time()
         query_embedding = self.get_embedding(query)
-        
+        self._tlog("TIMING semantic_search.get_embedding={:.2f}s".format(time.time() - t0_embed))
+
         # Search ChromaDB
+        t0_chroma = time.time()
         results = self.collection.query(
             query_embeddings=[query_embedding],
             n_results=n_results
         )
+        self._tlog("TIMING semantic_search.chroma_query={:.2f}s".format(time.time() - t0_chroma))
         
         # Format results
         formatted_results = []
@@ -417,8 +564,21 @@ class VectorDBClient:
         if n_results is None:
             n_results = self.max_results
         
-        # Extract keywords (simple split on whitespace and remove short words)
-        keywords = [k for k in query.lower().split() if len(k) > 2]
+        # Common English stop words that add noise without discriminating signal
+        _STOP_WORDS = {
+            'the', 'and', 'for', 'are', 'but', 'not', 'you', 'all', 'can',
+            'her', 'was', 'one', 'our', 'out', 'had', 'his', 'has', 'have',
+            'him', 'its', 'may', 'did', 'get', 'use', 'how', 'any', 'who',
+            'own', 'new', 'way', 'too', 'few', 'now', 'let', 'put', 'set',
+            'what', 'that', 'this', 'with', 'they', 'from', 'will', 'been',
+            'when', 'more', 'also', 'into', 'some', 'than', 'then', 'them',
+            'there', 'their', 'about', 'which', 'would', 'these', 'other',
+            'where', 'right', 'just', 'does', 'each', 'most', 'such', 'even',
+            'were', 'your', 'very', 'make', 'over', 'same', 'back', 'after',
+            'could', 'while', 'both', 'need', 'should', 'those', 'want',
+        }
+        # Extract keywords: remove short words AND stop words; keep meaningful terms
+        keywords = [k for k in query.lower().split() if len(k) > 2 and k not in _STOP_WORDS]
         
         if not keywords:
             return []
@@ -426,8 +586,10 @@ class VectorDBClient:
         # Use ChromaDB's where_document filter for efficient text search
         # Query for documents containing any of the keywords
         scored_results = []
-        
+        t0_kw_total = time.time()
+
         for keyword in keywords:
+            t0_kw = time.time()
             try:
                 # Use $contains operator for substring matching
                 results = self.collection.get(
@@ -469,9 +631,14 @@ class VectorDBClient:
                             'last_updated': metadata.get('last_updated', '')
                         })
             except Exception as e:
-                # If where_document fails, continue with other keywords
+                self._tlog("TIMING keyword_search.keyword='{}' ERROR={}".format(keyword, str(e)[:80]))
                 continue
-        
+            self._tlog("TIMING keyword_search.keyword='{}' duration={:.2f}s hits={}".format(
+                keyword, time.time() - t0_kw, len(results.get('ids', []))))
+
+        self._tlog("TIMING keyword_search.total={:.2f}s keywords={} results={}".format(
+            time.time() - t0_kw_total, len(keywords), len(scored_results)))
+
         # Sort by score and return top results
         scored_results.sort(key=lambda x: x['score'], reverse=True)
         return scored_results[:n_results]
@@ -594,8 +761,14 @@ class VectorDBClient:
             return cached_results
         
         # Perform both searches (get more results for merging)
+        t0_sem = time.time()
         semantic_results = self.semantic_search(query, n_results * 2)
+        self._tlog("TIMING hybrid.semantic_search={:.2f}s results={}".format(
+            time.time() - t0_sem, len(semantic_results)))
+        t0_kw = time.time()
         keyword_results = self.keyword_search(query, n_results * 2)
+        self._tlog("TIMING hybrid.keyword_search={:.2f}s results={}".format(
+            time.time() - t0_kw, len(keyword_results)))
         
         # NOTE: We do NOT normalize semantic scores anymore, as they are cosine similarities
         # that roughly map to absolute relevance (0-1). Normalizing them by batch min/max
