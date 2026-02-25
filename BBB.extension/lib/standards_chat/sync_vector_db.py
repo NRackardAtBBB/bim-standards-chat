@@ -9,19 +9,15 @@ import os
 # Add lib path so standards_chat package is importable
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-# Ensure numpy is available (installs once if missing).
-# Safety net for cases where the setup UI was skipped or this script
-# is run directly from the command line.
-try:
-    import numpy  # noqa: F401
-except ImportError:
-    import subprocess as _subp
-    _subp.Popen(
-        [sys.executable, '-m', 'pip', 'install', 'numpy',
-         '--quiet', '--disable-pip-version-check'],
-        stdout=_subp.PIPE, stderr=_subp.PIPE,
-        shell=False, creationflags=0x08000000,
-    ).communicate()
+# Add managed packages directory to sys.path so numpy (and any other pip-
+# installed packages) can be found.  pyRevit's CPython excludes site-packages
+# from sys.path, so we install to _PACKAGES_DIR and add it here explicitly.
+_packages_dir = os.path.join(
+    os.environ.get('LOCALAPPDATA', os.path.expanduser('~')),
+    'BBB', 'Kodama', 'packages'
+)
+if os.path.isdir(_packages_dir) and _packages_dir not in sys.path:
+    sys.path.insert(0, _packages_dir)
 
 from standards_chat.config_manager import ConfigManager
 from standards_chat.sharepoint_client import SharePointClient

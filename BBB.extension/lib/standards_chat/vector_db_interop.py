@@ -45,6 +45,11 @@ _STATE_DIR = os.path.join(
     'BBB', 'Kodama'
 )
 
+# Directory where pip-installed packages are placed.
+# pyRevit's CPython is a stripped distribution — Lib/site-packages is not in
+# sys.path by default, so we install to our own managed location instead.
+_PACKAGES_DIR = os.path.join(_STATE_DIR, 'packages')
+
 
 # ---------------------------------------------------------------------------
 # Find pyRevit's bundled CPython
@@ -145,20 +150,18 @@ _db_sync_status = {
 
 def check_numpy_installed():
     """
-    Return True if numpy is available in pyRevit's CPython.
-    Uses a fast filesystem check when the full path to python.exe is known;
-    falls back to a subprocess probe for PATH-based python.
+    Return True if numpy is available for pyRevit's CPython.
+    Checks our managed packages directory (_PACKAGES_DIR) first — this is
+    where we install numpy because pyRevit's CPython excludes site-packages
+    from sys.path.  Falls back to a subprocess probe for PATH-based python.
     """
     if _PYREVIT_PYTHON is None:
         return False
     try:
-        # Fast path: full exe path — check site-packages directory directly
-        if os.sep in _PYREVIT_PYTHON:
-            engine_dir = os.path.dirname(os.path.abspath(_PYREVIT_PYTHON))
-            numpy_init = os.path.join(engine_dir, 'Lib', 'site-packages',
-                                      'numpy', '__init__.py')
-            if os.path.isfile(numpy_init):
-                return True
+        # Primary check: our managed packages directory
+        numpy_init = os.path.join(_PACKAGES_DIR, 'numpy', '__init__.py')
+        if os.path.isfile(numpy_init):
+            return True
         # Fallback: PATH-based python — use a subprocess probe
         r = subprocess.Popen(
             [_PYREVIT_PYTHON, '-c', 'import numpy; print("ok")'],
@@ -176,35 +179,136 @@ def check_numpy_installed():
 
 def start_numpy_install_async():
     """
-    Start a background thread that pip-installs numpy into pyRevit's CPython.
+    Start a background thread that installs numpy into a managed directory.
+
+    pyRevit's CPython is a stripped distribution:
+      - pip is not present
+      - ensurepip is not present
+      - Lib/site-packages is NOT in sys.path
+
+    Strategy:
+      1. Set PYTHONPATH to <engine>/Lib/site-packages so pip (once installed
+         there by get-pip.py) is findable.
+      2. Bootstrap pip via get-pip.py if it's missing.
+      3. Install numpy with --target _PACKAGES_DIR (our writable location
+         that we explicitly add to sys.path in our CPython entry-point scripts).
+
+    All network/install work runs inside a CPython subprocess so Python-3-only
+    stdlib (urllib.request) is available.
     Progress is written to the module-level ``_numpy_setup_status`` dict.
     """
+    import tempfile
+
     def _worker():
         _numpy_setup_status['phase']      = 'running'
-        _numpy_setup_status['message']    = u'Installing numpy (one-time setup)\u2026'
+        _numpy_setup_status['message']    = u'Setting up Python environment\u2026'
         _numpy_setup_status['error']      = None
         _numpy_setup_status['start_time'] = time.time()
+        script_path = None
         try:
+            # pyRevit's CPython strips Lib/site-packages from sys.path.
+            # Strategy:
+            #   1. Bootstrap pip into site-packages via get-pip.py subprocess.
+            #   2. In the same setup subprocess, inject site-packages into
+            #      sys.path and call pip's Python API directly with --target,
+            #      installing numpy into our writable _PACKAGES_DIR.
+            engine_dir   = os.path.dirname(os.path.abspath(_PYREVIT_PYTHON)) \
+                           if os.sep in _PYREVIT_PYTHON else ''
+            site_pkg     = os.path.join(engine_dir, 'Lib', 'site-packages') \
+                           if engine_dir else ''
+            packages_dir = _PACKAGES_DIR
+
+            setup_script = u"""\
+import sys, os, subprocess, tempfile
+
+CREATE_NO_WINDOW = 0x08000000
+PACKAGES_DIR = {packages_dir!r}
+SITE_PKG     = {site_pkg!r}
+
+# Add engine site-packages to sys.path so pip internals are importable
+if SITE_PKG and SITE_PKG not in sys.path:
+    sys.path.insert(0, SITE_PKG)
+
+def _run_proc(*cmd):
+    p = subprocess.Popen(list(cmd), stdout=subprocess.PIPE,
+                         stderr=subprocess.PIPE, creationflags=CREATE_NO_WINDOW)
+    o, e = p.communicate()
+    return (p.returncode,
+            (o or b'').decode('utf-8', 'replace'),
+            (e or b'').decode('utf-8', 'replace'))
+
+# Step 1 - bootstrap pip if not already importable
+try:
+    from pip._internal.cli.main import main as _pip_main
+except ImportError:
+    sys.stdout.write('Bootstrapping pip...\\n'); sys.stdout.flush()
+    import urllib.request
+    fd, tmp = tempfile.mkstemp(suffix='.py'); os.close(fd)
+    try:
+        urllib.request.urlretrieve('https://bootstrap.pypa.io/get-pip.py', tmp)
+        rc, out, err = _run_proc(sys.executable, tmp, '--quiet')
+        if rc != 0:
+            sys.stderr.write('pip bootstrap failed (rc={{}}):\\n{{}}\\n{{}}'.format(rc, out, err))
+            sys.exit(1)
+    finally:
+        try: os.remove(tmp)
+        except: pass
+    if SITE_PKG not in sys.path:
+        sys.path.insert(0, SITE_PKG)
+    from pip._internal.cli.main import main as _pip_main
+
+# Step 2 - install numpy into our managed packages directory
+sys.stdout.write('Installing numpy...\\n'); sys.stdout.flush()
+os.makedirs(PACKAGES_DIR, exist_ok=True)
+rc = _pip_main(['install', 'numpy',
+                '--target', PACKAGES_DIR,
+                '--quiet', '--disable-pip-version-check'])
+if rc != 0:
+    sys.stderr.write('numpy install failed (rc={{}})\\n'.format(rc))
+    sys.exit(rc)
+sys.stdout.write('OK\\n')
+""".format(packages_dir=packages_dir, site_pkg=site_pkg)
+
+            import io
+            fd, script_path = tempfile.mkstemp(suffix='.py', prefix='kodama_setup_')
+            os.close(fd)
+            with io.open(script_path, 'w', encoding='utf-8') as f:
+                f.write(setup_script)
+
+            _numpy_setup_status['message'] = u'Installing pip and numpy (one-time, ~60 s)\u2026'
             proc = subprocess.Popen(
-                [_PYREVIT_PYTHON, '-m', 'pip', 'install', 'numpy',
-                 '--quiet', '--disable-pip-version-check'],
+                [_PYREVIT_PYTHON, script_path],
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                 shell=False, creationflags=0x08000000,
             )
-            proc.communicate()   # wait; discard output
+            stdout, stderr = proc.communicate()
+            if isinstance(stdout, bytes):
+                stdout = stdout.decode('utf-8', errors='replace')
+            if isinstance(stderr, bytes):
+                stderr = stderr.decode('utf-8', errors='replace')
+
             if proc.returncode == 0:
                 elapsed = time.time() - _numpy_setup_status['start_time']
-                debug_log('numpy install complete in {:.1f}s'.format(elapsed))
+                debug_log('numpy setup complete in {:.1f}s'.format(elapsed))
                 _numpy_setup_status['phase']   = 'done'
-                _numpy_setup_status['message'] = u'numpy installed successfully.'
+                _numpy_setup_status['message'] = u'Setup complete!'
             else:
+                detail = (stderr or stdout)[:300].strip()
+                debug_log(u'numpy setup failed:\nstdout: {}\nstderr: {}'.format(
+                    stdout[:400], stderr[:400]))
                 _numpy_setup_status['phase'] = 'error'
-                _numpy_setup_status['error'] = u'pip exited with code {}'.format(
-                    proc.returncode)
+                _numpy_setup_status['error'] = detail or u'Setup failed \u2014 check debug log.'
+
         except Exception as exc:
             debug_log('numpy install error: {}'.format(exc))
             _numpy_setup_status['phase'] = 'error'
             _numpy_setup_status['error'] = u'{}'.format(exc)
+        finally:
+            if script_path:
+                try:
+                    os.remove(script_path)
+                except Exception:
+                    pass
 
     t = _threading.Thread(target=_worker, name='kodama-numpy-install')
     t.daemon = True
