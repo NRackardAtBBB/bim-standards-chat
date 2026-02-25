@@ -17,6 +17,16 @@ lib_path = os.path.dirname(script_dir)
 if lib_path not in sys.path:
     sys.path.insert(0, lib_path)
 
+# Add managed packages directory to sys.path so numpy (and any other pip-
+# installed packages) can be found.  pyRevit's CPython excludes site-packages
+# from sys.path, so we install to _PACKAGES_DIR and add it here explicitly.
+_packages_dir = os.path.join(
+    os.environ.get('LOCALAPPDATA', os.path.expanduser('~')),
+    'BBB', 'Kodama', 'packages'
+)
+if os.path.isdir(_packages_dir) and _packages_dir not in sys.path:
+    sys.path.insert(0, _packages_dir)
+
 from standards_chat.config_manager import ConfigManager
 from standards_chat.vector_db_client import VectorDBClient
 

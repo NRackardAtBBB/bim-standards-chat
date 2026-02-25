@@ -71,6 +71,20 @@ class DisclaimerWindow(forms.WPFWindow):
             # If icon fails to load, just continue without it
             pass
     
+    def show_install_panel_only(self):
+        """
+        Collapse the disclaimer text/buttons and show only the install panel.
+        Call this before ShowDialog() when the disclaimer was already accepted
+        on a prior launch but numpy has not been installed yet.
+        """
+        try:
+            from System.Windows import Visibility
+            self.DisclaimerScrollView.Visibility = Visibility.Collapsed
+            self.DisclaimerButtonsBar.Visibility = Visibility.Collapsed
+            self.InstallPanel.Visibility         = Visibility.Visible
+        except Exception:
+            pass  # if XAML names differ, window will show normally
+
     def _accept_clicked(self, sender, args):
         """I Understand clicked — show install panel if needed, otherwise close."""
         if getattr(self, '_setup_needed', False):

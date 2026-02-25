@@ -307,7 +307,7 @@ class SettingsWindow(forms.WPFWindow):
             from standards_chat.vector_db_interop import get_local_env_status
             info = get_local_env_status()
             self.local_env_status_text.Text = (
-                u'{state}\nPath: {path}'.format(**info)
+                u'{message}\nPython: {python}'.format(**info)
             )
         except Exception as exc:
             self.local_env_status_text.Text = u'Status unavailable: {}'.format(exc)
@@ -541,35 +541,40 @@ class SettingsWindow(forms.WPFWindow):
             
             # Save current settings first
             self._save_config_to_disk()
-            
-            # Show progress
-            System.Windows.Input.Mouse.OverrideCursor = System.Windows.Input.Cursors.Wait
-            
-            # Use sync script approach to avoid freezing
-            # In a real app we'd use a background thread, but for now we'll run inline
-            # We need to import the sync tool
-            from standards_chat.sync_vector_db import VectorDBSycner
-            
-            # Re-initialize config manager with potentially new settings
-            from standards_chat.config_manager import ConfigManager
-            config_manager = ConfigManager()
-            
-            syncer = VectorDBSycner(config_manager)
-            
-            # Run sync
-            stats = syncer.sync_all(force_rebuild=True)
-            
-            # Show results
-            msg = "Re-index complete!\n\nDocuments processed: {}\nChunks generated: {}\nDuration: {:.1f}s".format(
-                stats['documents_processed'],
-                stats['chunks_generated'],
-                stats['duration_seconds']
+
+            # Run the full SharePoint → vector DB sync as a background subprocess
+            from standards_chat.vector_db_interop import _PYREVIT_PYTHON, debug_log
+            import subprocess as _sp
+            import os as _os
+
+            sync_script = _os.path.join(
+                _os.path.dirname(_os.path.abspath(__file__)), 'sync_vector_db.py'
             )
-            
-            forms.alert(msg, title="Success")
-            
+
+            if not _PYREVIT_PYTHON:
+                forms.alert(
+                    "Cannot run re-index: pyRevit CPython not found.\n"
+                    "Make sure pyRevit is installed.",
+                    title="Error", warn_icon=True
+                )
+                return
+
+            _sp.Popen(
+                [_PYREVIT_PYTHON, sync_script],
+                stdout=_sp.PIPE, stderr=_sp.PIPE,
+                shell=False, creationflags=0x08000000
+            )
+            debug_log("reindex_vector_db_click: launched sync_vector_db.py subprocess")
+
+            forms.alert(
+                "Re-index started in the background.\n\n"
+                "The vector database will be rebuilt from the latest SharePoint content.\n"
+                "This may take a few minutes.",
+                title="Re-index Started"
+            )
+
             # Update stats UI
-            self.load_settings() # Reload config to get new stats
+            self.load_settings()
             self._update_vector_search_stats()
                     
         except Exception as e:

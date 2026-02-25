@@ -40,7 +40,15 @@ def main():
     try:
         # Initialize config manager
         config_manager = ConfigManager()
-        
+
+        # ------------------------------------------------------------------
+        # Helper: create and show the chat window.
+        # Defined early so it can be passed as a callback to the setup toast.
+        # ------------------------------------------------------------------
+        def _launch_chat_window():
+            chat_window = StandardsChatWindow()
+            chat_window.Show()
+
         # Check if user has seen and accepted disclaimer
         # Use hasattr for backwards compatibility with cached modules
         if hasattr(config_manager, 'has_accepted_disclaimer'):
@@ -48,25 +56,29 @@ def main():
         else:
             # Fallback for cached module - check directly
             has_accepted = config_manager.get('user', 'has_seen_disclaimer', False)
-        
-        if not has_accepted:
-            # Check cheaply whether the local venv needs to be created so the
-            # disclaimer window can show the install-prompt panel only when needed.
-            try:
-                from standards_chat.vector_db_interop import _LOCAL_VENV_PYTHON
-                _setup_needed = not os.path.isfile(_LOCAL_VENV_PYTHON)
-            except Exception:
-                _setup_needed = False
 
-            # Show disclaimer window (modal)
+        # ------------------------------------------------------------------
+        # Check whether numpy is available in pyRevit's CPython.
+        # This is a fast filesystem check — no subprocess on normal installs.
+        # Fail-safe: default to True so we never block launch on any error.
+        # ------------------------------------------------------------------
+        numpy_installed = True
+        try:
+            from standards_chat import vector_db_interop as _vdb
+            numpy_installed = _vdb.check_numpy_installed()
+        except Exception:
+            pass
+
+        if not has_accepted:
+            # First launch: show full disclaimer; reveal install panel if needed
             disclaimer = DisclaimerWindow()
-            disclaimer._setup_needed = _setup_needed
+            disclaimer._setup_needed = not numpy_installed
             result = disclaimer.ShowDialog()
-            
+
             # If user declined or closed window, exit
             if not result:
                 return
-            
+
             # User accepted - save acceptance
             if hasattr(config_manager, 'mark_disclaimer_accepted'):
                 config_manager.mark_disclaimer_accepted()
@@ -81,33 +93,43 @@ def main():
                 config_manager.save()
 
             # If the user chose "Not right now" on the install panel, stop here.
-            # Disclaimer is saved — they won't be prompted again.  Setup will
-            # start automatically the next time they open Kodama.
+            # Disclaimer is saved — they won't be prompted again.  The install
+            # panel will be shown again the next time they open Kodama.
             if not getattr(disclaimer, 'wants_to_launch', True):
                 return
-        
+
+        elif not numpy_installed:
+            # Disclaimer was accepted on a prior launch but numpy is still
+            # missing (user chose "Not right now" before).
+            # Skip the disclaimer text and show only the install panel.
+            disclaimer = DisclaimerWindow()
+            disclaimer._setup_needed = True
+            disclaimer.show_install_panel_only()
+            result = disclaimer.ShowDialog()
+
+            if not result:
+                return
+
+            # "Not right now" again — come back next session
+            if not getattr(disclaimer, 'wants_to_launch', True):
+                return
+
         # ------------------------------------------------------------------
-        # Helper: create and show the chat window, deferring if venv setup
-        # is still running (same logic as before, now in its own function
-        # so it can be called as a callback from DBUpdateWindow).
+        # If numpy needs installing (user just chose "Get Kodama Ready Now"),
+        # start a background pip install and show the progress toast.
+        # The toast's "Launch Now" button calls _launch_chat_window() when done.
         # ------------------------------------------------------------------
-        def _launch_chat_window():
-            chat_window = StandardsChatWindow()
-            setup_deferred = False
+        if not numpy_installed:
             try:
-                from standards_chat import vector_db_interop as _vdb_inner
-                if _vdb_inner._setup_status.get('phase') == 'running':
-                    toast = getattr(
-                        getattr(chat_window, 'vector_db_client', None),
-                        '_setup_toast', None
-                    )
-                    if toast is not None:
-                        toast.set_launch_callback(chat_window.Show)
-                        setup_deferred = True
+                from standards_chat import vector_db_interop as _vdb
+                from standards_chat.setup_progress_window import SetupProgressWindow
+                _vdb.start_numpy_install_async()
+                setup_toast = SetupProgressWindow(status_dict=_vdb._numpy_setup_status)
+                setup_toast.set_launch_callback(_launch_chat_window)
+                setup_toast.Show()
+                return  # Kodama opens via "Launch Now" button when install finishes
             except Exception:
-                pass
-            if not setup_deferred:
-                chat_window.Show()
+                pass  # fall through — pip guard in search_vector_db.py handles it
 
         # ------------------------------------------------------------------
         # Startup DB update check — if the network has a newer standards DB

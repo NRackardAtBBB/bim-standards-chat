@@ -1,12 +1,9 @@
-# Vector Database and Embeddings
-chromadb>=0.4.0
-openai>=1.0.0
-tiktoken>=0.5.0
+# Dev/admin tooling only — NOT required on end-user machines.
+# The PyRevit extension uses pyRevit's bundled CPython (numpy + urllib stdlib).
+
+# PDF Processing (used by dev/sync scripts if run locally)
+pypdf>=3.0.0
 tqdm>=4.0.0
 
-# PDF Processing
-pypdf>=3.0.0
-
-# Existing dependencies (for reference)
-# anthropic - For Claude AI API
-# requests - For HTTP requests (if not using .NET HttpClient)
+# Removed: chromadb, openai, tiktoken
+# These are replaced by numpy (bundled with pyRevit) and urllib.request (stdlib).
